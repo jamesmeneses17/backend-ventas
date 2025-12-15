@@ -21,5 +21,6 @@ import { R2Module } from '../../../common/r2.module';
   ],
   controllers: [ProductosController],
   providers: [ProductosService],
+  
 })
 export class ProductosModule { }
