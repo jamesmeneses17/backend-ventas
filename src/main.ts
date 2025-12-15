@@ -35,6 +35,7 @@ async function bootstrap() {
       configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173',
       'http://localhost:3000', // Para React en puerto 3000
       'http://127.0.0.1:3000',
+      'https://disemsas.com',
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
