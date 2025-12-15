@@ -65,6 +65,7 @@ import { SubcategoriasModule } from './modules/catalogos_basicos/subcategorias/s
     InformacionEmpresaModule,
     BannerModule,
     SubcategoriasModule,
+    
   ],
   controllers: [AppController],
   providers: [AppService],

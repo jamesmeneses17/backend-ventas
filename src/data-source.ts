@@ -25,7 +25,7 @@ export const AppDataSource = new DataSource({
   port: Number(process.env.DB_PORT) || 3306,
   username: process.env.DB_USER || 'root',
   password: process.env.DB_PASS || '',
-  database: process.env.DB_NAME || 'sistema_ventas',
+  database: process.env.DB_NAME || 'railway',
   entities: [Categoria, Subcategoria, UsuarioAdmin, Producto, Marca, UnidadMedida, Especificacion, Estado, Inventario, Precio, Compra],
   migrations: ['src/migrations/*.ts'],
 });

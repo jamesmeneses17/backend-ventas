@@ -1,5 +1,11 @@
 // src/creditos/dto/create-credito.dto.ts
-import { IsString, IsNumber, IsDateString, Min } from 'class-validator';
+import { IsString, IsNumber, IsDateString, Min, IsOptional, ValidateNested, IsArray } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CreateDetalleCreditoDto {
+  @IsString()
+  articulo_nombre: string;
+}
 
 export class CreateCreditoDto {
   @IsNumber()
@@ -17,4 +23,14 @@ export class CreateCreditoDto {
 
   @IsDateString()
   fecha_final: string;
+
+  @IsOptional()
+  @IsString()
+  num_factura?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateDetalleCreditoDto)
+  detalles?: CreateDetalleCreditoDto[];
 }

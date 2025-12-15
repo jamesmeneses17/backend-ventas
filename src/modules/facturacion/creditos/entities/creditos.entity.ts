@@ -1,5 +1,6 @@
 // src/creditos/entities/creditos.entity.ts
 import { Column, Entity, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
+import { DetalleCredito } from './detalle-credito.entity';
 import { CreditoEstado } from '../credito-estado.enum';
 import { PagosCredito } from '../../pago-credito/entities/pago-credito.entity';
 
@@ -26,6 +27,9 @@ export class Credito {
   @Column({ type: 'date' })
   fecha_final: Date;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  num_factura: string;
+
   @Column({
     type: 'varchar',
     length: 20,
@@ -35,6 +39,9 @@ export class Credito {
 
   @OneToMany(() => PagosCredito, (p) => p.credito)
   pagos: PagosCredito[];
+
+  @OneToMany(() => DetalleCredito, (detalle) => detalle.credito, { cascade: true })
+  detalles: DetalleCredito[];
 }
 export { CreditoEstado };
 
