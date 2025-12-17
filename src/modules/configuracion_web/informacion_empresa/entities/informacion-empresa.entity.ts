@@ -1,72 +1,53 @@
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
+@Entity('configuracion_empresa')
 export class InformacionEmpresa {
-    
-    // CAMPOS DE ORM (simulados)
-    // @PrimaryGeneratedColumn() 
-    id: number; 
+    @PrimaryGeneratedColumn()
+    id: number;
 
     // DATOS IDENTIFICATIVOS
-    // @Column({ type: 'varchar', length: 100, nullable: false })
+    @Column({ name: 'nombre_empresa', type: 'varchar', length: 150, nullable: false })
     nombreEmpresa: string;
-    
-    // @Column({ type: 'varchar', length: 100, nullable: true })
-    razonSocial?: string;
-    
-    // @Column({ type: 'varchar', length: 50, nullable: true })
-    nit?: string; // Campo opcional que puede ser útil
 
-    
-    // DATOS DE CONTACTO
-    // @Column({ type: 'varchar', length: 50, nullable: false })
-    telefonoFijo: string;
+    @Column({ name: 'nit', type: 'varchar', length: 30, nullable: true })
+    nit?: string;
 
-    // @Column({ type: 'varchar', length: 50, nullable: false })
-    whatsapp: string; 
+    @Column({ name: 'direccion_fiscal', type: 'varchar', length: 255, nullable: true })
+    direccionPrincipal?: string;
 
-    // @Column({ type: 'varchar', length: 100, nullable: false })
-    emailInfo: string; 
+    @Column({ name: 'telefono_principal', type: 'varchar', length: 20, nullable: true })
+    telefonoFijo?: string;
 
-    // @Column({ type: 'varchar', length: 100, nullable: true })
-    emailVentas?: string;
+    @Column({ name: 'whatsapp', type: 'varchar', length: 20, nullable: true })
+    whatsapp?: string;
 
+    @Column({ name: 'correo_contacto', type: 'varchar', length: 100, nullable: true })
+    emailInfo?: string;
 
-    // UBICACIÓN PRINCIPAL
-    // @Column({ type: 'varchar', length: 255, nullable: false })
-    direccionPrincipal: string; 
+    @Column({ name: 'url_web', type: 'varchar', length: 255, nullable: true })
+    urlWeb?: string;
 
-
-    // HORARIOS DE ATENCIÓN
-    // @Column({ type: 'varchar', length: 100, nullable: false })
-    horarioLunesViernes: string; 
-    
-    // @Column({ type: 'varchar', length: 100, nullable: false })
-    horarioSabados: string; 
-    
-    // @Column({ type: 'varchar', length: 100, nullable: false })
-    horarioDomingos: string; 
-
-
-    // REDES SOCIALES (URLs)
-    // @Column({ type: 'varchar', length: 255, nullable: true })
+    @Column({ name: 'url_facebook', type: 'varchar', length: 255, nullable: true })
     urlFacebook?: string;
-    
-    // @Column({ type: 'varchar', length: 255, nullable: true })
+
+    @Column({ name: 'url_instagram', type: 'varchar', length: 255, nullable: true })
     urlInstagram?: string;
-    
-    // @Column({ type: 'varchar', length: 255, nullable: true })
+
+    @Column({ name: 'url_linkedin', type: 'varchar', length: 255, nullable: true })
     urlLinkedIn?: string;
 
-    // IMÁGENES y LOGOS (Se almacenan como URLs)
-    // @Column({ type: 'varchar', length: 255, nullable: false })
-    urlLogo: string; 
-    
-    // @Column({ type: 'varchar', length: 255, nullable: true })
-    urlFavicon?: string;
-    
-    // CONTROL DE AUDITORÍA (Opcional, pero recomendado)
-    // @CreateDateColumn()
-    createdAt: Date;
-    
-    // @UpdateDateColumn()
+    @Column({ name: 'logo_url', type: 'varchar', length: 255, nullable: true })
+    urlLogo?: string;
+
+    @Column({ name: 'horario_lun_vie', type: 'varchar', length: 50, nullable: true })
+    horarioLunesViernes?: string;
+
+    @Column({ name: 'horario_sabado', type: 'varchar', length: 50, nullable: true })
+    horarioSabados?: string;
+
+    @Column({ name: 'horario_domingo', type: 'varchar', length: 50, nullable: true })
+    horarioDomingos?: string;
+
+    @Column({ name: 'fecha_ultima_actualizacion', type: 'timestamp', nullable: false })
     updatedAt: Date;
 }
