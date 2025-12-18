@@ -24,5 +24,7 @@ export class CreateInformacionEmpresaDto {
   @MaxLength(50)
   telefonoFijo: string;
 
-
+  @IsOptional()
+  @IsString()
+  nosotros?: string;
 }

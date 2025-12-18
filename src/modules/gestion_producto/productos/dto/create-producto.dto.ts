@@ -47,4 +47,7 @@ export class CreateProductoDto {
   @IsOptional()
   @Min(0)
   promocion_porcentaje?: number;
+  // Estado activo (opcional, por defecto true)
+  @IsOptional()
+  activo?: boolean;
 }

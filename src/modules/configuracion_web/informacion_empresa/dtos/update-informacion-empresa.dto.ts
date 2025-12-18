@@ -60,4 +60,8 @@ export class UpdateInformacionEmpresaDto {
   @IsOptional()
   @MaxLength(255)
   urlLinkedIn?: string;
+
+  @IsOptional()
+  @IsString()
+  nosotros?: string;
 }

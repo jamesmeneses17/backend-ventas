@@ -48,6 +48,9 @@ export class InformacionEmpresa {
     @Column({ name: 'horario_domingo', type: 'varchar', length: 50, nullable: true })
     horarioDomingos?: string;
 
+    @Column({ name: 'nosotros', type: 'text', nullable: true })
+    nosotros?: string;
+
     @Column({ name: 'fecha_ultima_actualizacion', type: 'timestamp', nullable: false })
     updatedAt: Date;
 }
