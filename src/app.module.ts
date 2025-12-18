@@ -26,6 +26,8 @@ import { InformacionEmpresaModule } from './modules/configuracion_web/informacio
 import { BannerModule } from './modules/configuracion_web/banners_carrusel/banner.module';
 import { SubcategoriasModule } from './modules/catalogos_basicos/subcategorias/subcategorias.module';
 import { BannerImagen } from './modules/configuracion_web/banners_carrusel/entities/banner-imagen.entity';
+import { PagoCredito } from './modules/facturacion/pagos-creditos/entities/pago-credito.entity';
+import { PagosCreditoModule } from './modules/facturacion/pagos-creditos/pagos-credito.module';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
@@ -64,9 +66,8 @@ import { BannerImagen } from './modules/configuracion_web/banners_carrusel/entit
     SubcategoriasModule,
     InformacionEmpresaModule,
     BannerModule,
-    BannerImagen,
-    R2Module,
-    
+    CreditosModule,
+    PagosCreditoModule
   ],
   controllers: [AppController],
   providers: [AppService],

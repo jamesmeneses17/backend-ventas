@@ -1,6 +1,8 @@
 // src/creditos/entities/creditos.entity.ts
+
 import { Column, Entity, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import { DetalleCredito } from './detalle-credito.entity';
+import { PagoCredito } from '../../pagos-creditos/entities/pago-credito.entity';
 
 @Entity('creditos')
 export class Credito {
@@ -27,5 +29,8 @@ export class Credito {
 
   @OneToMany(() => DetalleCredito, (detalle) => detalle.credito, { cascade: true })
   detalles: DetalleCredito[];
+
+  @OneToMany(() => PagoCredito, (pago) => pago.credito)
+  pagos: PagoCredito[];
 }
 
