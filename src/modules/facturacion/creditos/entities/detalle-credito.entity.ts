@@ -1,7 +1,7 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn, JoinColumn } from 'typeorm';
 import { Credito } from './creditos.entity';
 
-@Entity('detalle_creditos')
+@Entity('detalles_creditos')
 export class DetalleCredito {
   @PrimaryGeneratedColumn()
   id: number;
@@ -10,6 +10,15 @@ export class DetalleCredito {
   @JoinColumn({ name: 'credito_id' })
   credito: Credito;
 
-  @Column({ type: 'varchar', length: 255 })
-  articulo_nombre: string;
+  @Column({ type: 'int' })
+  producto_id: number;
+
+  @Column({ type: 'int' })
+  cantidad: number;
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  precio_unitario: number;
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  subtotal: number;
 }

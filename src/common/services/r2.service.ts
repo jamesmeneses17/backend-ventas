@@ -1,6 +1,6 @@
 // src/common/services/r2.service.ts
 import { Injectable } from '@nestjs/common';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { randomBytes } from 'crypto';
 import * as path from 'path';
 
@@ -47,5 +47,14 @@ export class R2Service {
     // URL pública (si configuraste el dominio público en R2)
     const publicUrl = `${this.publicUrl}/${Key}`;
     return { Key, url: publicUrl };
+  }
+
+  async deleteFile(key: string) {
+    const cmd = new DeleteObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+    await this.client.send(cmd);
+    return { message: 'Archivo eliminado de R2', key };
   }
 }

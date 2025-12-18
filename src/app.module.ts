@@ -11,7 +11,6 @@ import { ProductosModule } from './modules/gestion_producto/productos/productos.
 import { InventarioModule } from './modules/gestion_producto/inventario/inventario.module';
 import { PreciosModule } from './modules/gestion_producto/precios/precios.module';
 import { TiposDocumentoModule } from './modules/cliente-administracion/tipos-documento/tipos-documento.module';
-import { FacturasModule } from './modules/facturacion/facturas/facturas.module';
 import { UsuariosAdminModule } from './modules/cliente-administracion/usuarios-admin/usuarios-admin.module';
 import { MetodosPagoModule } from './modules/cliente-administracion/metodos-pago/metodos-pago.module';
 import { ClientesModule } from './modules/cliente-administracion/clientes/clientes.module';
@@ -20,13 +19,13 @@ import { ComprasModule } from './modules/gestion_producto/compras/compras.module
 import { Venta } from './modules/gestion_producto/ventas/entities/venta.entity';
 import { VentasModule } from './modules/gestion_producto/ventas/ventas.module';
 import { CreditosModule } from './modules/facturacion/creditos/creditos.module';
-import { PagosCreditoModule } from './modules/facturacion/pago-credito/pagos_credito.module';
 import { CategoriasPrincipalesModule } from './modules/catalogos_basicos/categorias-principales/categorias-principales.module';
 import { R2Service } from './common/services/r2.service';
 import { R2Module } from './common/r2.module';
 import { InformacionEmpresaModule } from './modules/configuracion_web/informacion_empresa/informacion-empresa.module';
 import { BannerModule } from './modules/configuracion_web/banners_carrusel/banner.module';
 import { SubcategoriasModule } from './modules/catalogos_basicos/subcategorias/subcategorias.module';
+import { BannerImagen } from './modules/configuracion_web/banners_carrusel/entities/banner-imagen.entity';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
@@ -54,18 +53,19 @@ import { SubcategoriasModule } from './modules/catalogos_basicos/subcategorias/s
     ClientesModule,
     MetodosPagoModule,
     UsuariosAdminModule,
-    FacturasModule,
     AuthModule,
     ComprasModule,
     VentasModule,
     CreditosModule,
-    PagosCreditoModule,
     CategoriasPrincipalesModule,
     R2Module,
     InformacionEmpresaModule,
     BannerModule,
     SubcategoriasModule,
-    InformacionEmpresaModule
+    InformacionEmpresaModule,
+    BannerModule,
+    BannerImagen,
+    R2Module,
     
   ],
   controllers: [AppController],
