@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PedidoOnline } from './entities/pedido-online.entity';
@@ -16,7 +16,6 @@ export class PedidosOnlineService {
 
   async crearPedido(dto: CreatePedidoOnlineDto) {
     try {
-      // 1. Mapear los detalles y calcular subtotales internamente
       const detalles = dto.detalles.map((d) => {
         const detalle = new DetallePedidoOnline();
         detalle.producto_id = d.producto_id;
@@ -26,14 +25,12 @@ export class PedidosOnlineService {
         return detalle;
       });
 
-      // 2. Crear la instancia del pedido
       const nuevoPedido = this.pedidoRepo.create({
         total: dto.total,
         estado: 'PENDIENTE',
         detalles: detalles,
       });
 
-      // 3. Guardar (TypeORM manejará el @BeforeInsert para el código y hash)
       const pedidoGuardado = await this.pedidoRepo.save(nuevoPedido);
 
       return {
@@ -54,5 +51,33 @@ export class PedidosOnlineService {
       relations: ['detalles'],
       order: { fecha: 'DESC' },
     });
+  }
+
+  /**
+   * ✅ NUEVO MÉTODO: Actualiza el estado del pedido
+   * Esto es lo que hace que desaparezca de la campana de pendientes
+   */
+  async actualizarEstado(id: number, estado: string) {
+    try {
+      const pedido = await this.pedidoRepo.findOne({ where: { id } });
+      
+      if (!pedido) {
+        throw new NotFoundException(`El pedido con ID ${id} no existe`);
+      }
+
+      // Actualizamos el estado (PENDIENTE -> CONFIRMADO / CANCELADO)
+      pedido.estado = estado as any;
+      await this.pedidoRepo.save(pedido);
+
+      return { 
+        mensaje: `Estado del pedido actualizado a ${estado}`,
+        id: pedido.id,
+        nuevoEstado: pedido.estado 
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      console.error('Error al actualizar estado:', error);
+      throw new InternalServerErrorException('Error interno al actualizar el estado del pedido');
+    }
   }
 }
