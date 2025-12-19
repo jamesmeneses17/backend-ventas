@@ -28,6 +28,8 @@ import { SubcategoriasModule } from './modules/catalogos_basicos/subcategorias/s
 import { BannerImagen } from './modules/configuracion_web/banners_carrusel/entities/banner-imagen.entity';
 import { PagoCredito } from './modules/facturacion/pagos-creditos/entities/pago-credito.entity';
 import { PagosCreditoModule } from './modules/facturacion/pagos-creditos/pagos-credito.module';
+import { PedidoOnline } from './modules/facturacion/pedidos-online/entities/pedido-online.entity';
+import { PedidosOnlineModule } from './modules/facturacion/pedidos-online/pedidos-online.module';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
@@ -67,7 +69,8 @@ import { PagosCreditoModule } from './modules/facturacion/pagos-creditos/pagos-c
     InformacionEmpresaModule,
     BannerModule,
     CreditosModule,
-    PagosCreditoModule
+    PagosCreditoModule,
+    PedidosOnlineModule
   ],
   controllers: [AppController],
   providers: [AppService],
