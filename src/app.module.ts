@@ -30,6 +30,8 @@ import { PagoCredito } from './modules/facturacion/pagos-creditos/entities/pago-
 import { PagosCreditoModule } from './modules/facturacion/pagos-creditos/pagos-credito.module';
 import { PedidoOnline } from './modules/facturacion/pedidos-online/entities/pedido-online.entity';
 import { PedidosOnlineModule } from './modules/facturacion/pedidos-online/pedidos-online.module';
+import { CajaModule } from './modules/facturacion/caja/caja.module';
+import { TiposMovimientoModule } from './modules/catalogos_basicos/tipos-movimiento/tipos-movimiento.module';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
@@ -70,7 +72,9 @@ import { PedidosOnlineModule } from './modules/facturacion/pedidos-online/pedido
     BannerModule,
     CreditosModule,
     PagosCreditoModule,
-    PedidosOnlineModule
+    PedidosOnlineModule,
+    TiposMovimientoModule,
+    CajaModule
   ],
   controllers: [AppController],
   providers: [AppService],
