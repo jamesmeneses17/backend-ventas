@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { CreateMovimientoCajaDto } from './dtos/create-movimiento-caja.dto';
 import { UpdateMovimientoCajaDto } from './dtos/update-movimiento-caja.dto';
 import { CajaService } from './caja.service';
@@ -13,13 +13,23 @@ export class CajaController {
     }
 
     @Get()
-    findAll() {
-        return this.cajaService.findAll();
+    findAll(@Query('tipo_movimiento') tipoMovimiento?: string) {
+        return this.cajaService.findAll(tipoMovimiento);
     }
 
     @Get('stats')
     getStats() {
         return this.cajaService.getStats();
+    }
+
+    @Get('reporte/anual/:anio')
+    getResumenAnual(@Param('anio') anio: string) {
+        return this.cajaService.getResumenAnual(+anio);
+    }
+
+    @Get('reporte/diario/:anio/:mes')
+    getResumenDiario(@Param('anio') anio: string, @Param('mes') mes: string) {
+        return this.cajaService.getResumenDiario(+anio, +mes);
     }
 
     @Get(':id')
