@@ -62,18 +62,19 @@ export class CajaService {
         // Obtener fecha actual en formato YYYY-MM-DD
         const today = new Date().toISOString().split('T')[0];
 
-        // 1. Saldo Actual: (Ingresos) - (Egresos + Gastos)
-        // Asumimos ID 1 = Ingreso, ID 2 = Egreso, ID 3 = Gasto
+        // 1. Saldo Actual: (Ingresos + Ventas) - (Egresos + Gastos)
+        // ID 1 = Ingreso, ID 4 = Venta  => Sumar
+        // ID 2 = Egreso, ID 3 = Gasto   => Restar
         const saldoQuery = await this.repository
             .createQueryBuilder('caja')
-            .select("SUM(CASE WHEN caja.tipoMovimientoId = 1 THEN caja.monto ELSE -caja.monto END)", "saldo")
+            .select("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4) THEN caja.monto ELSE -caja.monto END)", "saldo")
             .getRawOne();
 
-        // 2. Ingresos de Hoy
+        // 2. Ingresos de Hoy (Ingresos + Ventas)
         const ingresosQuery = await this.repository
             .createQueryBuilder('caja')
             .select("SUM(caja.monto)", "total")
-            .where("caja.tipoMovimientoId = 1")
+            .where("caja.tipoMovimientoId IN (1, 4)")
             .andWhere("caja.fecha = :today", { today })
             .getRawOne();
 
@@ -96,7 +97,7 @@ export class CajaService {
         // MySQL: MONTH(fecha) devuelve 1..12
         const result = await this.repository.createQueryBuilder('caja')
             .select("MONTH(caja.fecha)", "mesNum")
-            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 1 THEN caja.monto ELSE 0 END)", "ingresos")
+            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4) THEN caja.monto ELSE 0 END)", "ingresos")
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 2 THEN caja.monto ELSE 0 END)", "egresos")
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 3 THEN caja.monto ELSE 0 END)", "gastos")
             .where("YEAR(caja.fecha) = :anio", { anio })
@@ -122,12 +123,15 @@ export class CajaService {
 
         return result.map(r => {
             const index = Number(r.mesNum) - 1;
+            const ingresos = Number(r.ingresos);
+            const egresos = Number(r.egresos);
+            const gastos = Number(r.gastos);
             return {
                 mes: mesesNombres[index],
-                ingresos: Number(r.ingresos),
-                egresos: Number(r.egresos),
-                gastos: Number(r.gastos),
-                saldo: Number(r.ingresos) - (Number(r.egresos) + Number(r.gastos))
+                ingresos: ingresos,
+                egresos: egresos,
+                gastos: gastos,
+                saldo: ingresos - (egresos + gastos)
             };
         });
     }
@@ -136,7 +140,7 @@ export class CajaService {
         // Agrupar por día
         const result = await this.repository.createQueryBuilder('caja')
             .select("caja.fecha", "fecha") // Fecha completa
-            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 1 THEN caja.monto ELSE 0 END)", "ingreso")
+            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4) THEN caja.monto ELSE 0 END)", "ingreso")
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 2 THEN caja.monto ELSE 0 END)", "egreso")
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 3 THEN caja.monto ELSE 0 END)", "gasto")
             .where("YEAR(caja.fecha) = :anio AND MONTH(caja.fecha) = :mes", { anio, mes })
@@ -144,13 +148,18 @@ export class CajaService {
             .orderBy("caja.fecha", "ASC")
             .getRawMany();
 
-        return result.map(r => ({
-            fecha: r.fecha, // string YYYY-MM-DD o Date
-            mes: "", // Se puede llenar en el front o aquí
-            ingreso: Number(r.ingreso),
-            egreso: Number(r.egreso),
-            gasto: Number(r.gasto),
-            saldo: Number(r.ingreso) - (Number(r.egreso) + Number(r.gasto))
-        }));
+        return result.map(r => {
+            const ingreso = Number(r.ingreso);
+            const egreso = Number(r.egreso);
+            const gasto = Number(r.gasto);
+            return {
+                fecha: r.fecha, // string YYYY-MM-DD o Date
+                mes: "", // Se puede llenar en el front o aquí
+                ingreso: ingreso,
+                egreso: egreso,
+                gasto: gasto,
+                saldo: ingreso - (egreso + gasto)
+            };
+        });
     }
 }

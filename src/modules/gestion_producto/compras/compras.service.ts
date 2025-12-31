@@ -8,6 +8,7 @@ import { UpdateCompraDto } from './dto/update-compra.dto';
 import { Compra } from './entities/compra.entity';
 import { Producto } from '../productos/entities/producto.entity';
 import { Inventario } from '../inventario/entities/inventario.entity';
+import { CajaService } from '../../facturacion/caja/caja.service';
 
 @Injectable()
 export class ComprasService {
@@ -18,7 +19,8 @@ export class ComprasService {
     private readonly productoRepo: Repository<Producto>,
     @InjectRepository(Inventario)
     private readonly inventarioRepo: Repository<Inventario>,
-  ) {}
+    private readonly cajaService: CajaService, // Inject CajaService
+  ) { }
 
   // ===== CREAR =====
   async create(dto: CreateCompraDto) {
@@ -67,6 +69,29 @@ export class ComprasService {
 
     const compra = this.compraRepo.create(data);
     const compraGuardada = await this.compraRepo.save(compra);
+
+    // ===== REGISTRAR EGRESO EN CAJA (ID 2) =====
+    try {
+      // Usamos el DTO original porque 'data' está tipado como Partial<Compra> y podría no tener campos extra
+      const dtoAny = dto as any;
+      if (dtoAny.monto_total || (data.cantidad && data.costo_unitario)) {
+        const monto = dtoAny.monto_total
+          ? Number(dtoAny.monto_total)
+          : Number(data.cantidad) * Number(data.costo_unitario);
+
+        const concepto = `Compra: ${producto?.nombre || 'Producto sin nombre'} - Cant: ${data.cantidad}`;
+
+        await this.cajaService.create({
+          tipo_movimiento_id: 2, // ID 2 = Egreso
+          fecha: data.fecha || new Date().toISOString().split('T')[0],
+          monto: monto,
+          concepto: concepto,
+        });
+      }
+    } catch (error) {
+      console.error("Error al registrar egreso en caja para la compra:", error);
+      // No bloqueamos la compra si falla el registro en caja, pero logueamos
+    }
 
     // ===== ACTUALIZAR INVENTARIO Y PRECIO DE COSTO =====
     if (producto && data.costo_unitario && data.cantidad) {

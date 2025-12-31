@@ -8,6 +8,7 @@ import { CreateVentaDto } from './dto/CreateVentaDto';
 import { UpdateVentaDto } from './dto/UpdateVentaDto';
 import { Producto } from '../productos/entities/producto.entity';
 import { Inventario } from '../inventario/entities/inventario.entity';
+import { CajaService } from '../../facturacion/caja/caja.service';
 @Injectable()
 export class VentasService {
   constructor(
@@ -17,7 +18,8 @@ export class VentasService {
     private readonly productoRepository: Repository<Producto>,
     @InjectRepository(Inventario)
     private readonly inventarioRepository: Repository<Inventario>,
-  ) {}
+    private readonly cajaService: CajaService,
+  ) { }
 
   // Crear una nueva venta
   async create(createVentaDto: CreateVentaDto): Promise<Venta> {
@@ -41,6 +43,19 @@ export class VentasService {
     if (!ventaConProducto) {
       throw new NotFoundException(`Venta con ID ${ventaGuardada.id} no encontrada después de crearla.`);
     }
+
+    // REGISTRAR MOVIMIENTO EN CAJA (Venta = ID 4)
+    // Concepto: "Cod: [CODIGO] - [NOMBRE]"
+    const concepto = `Cod: ${ventaConProducto.producto?.codigo || 'SN'} - ${ventaConProducto.producto?.nombre || 'Producto'}`;
+    const totalVenta = Number(createVentaDto.cantidad) * Number(createVentaDto.precio_venta);
+
+    await this.cajaService.create({
+      tipo_movimiento_id: 4, // ID 4 = Venta
+      fecha: createVentaDto.fecha, // string YYYY-MM-DD
+      monto: totalVenta,
+      concepto: concepto,
+    });
+
     return ventaConProducto;
   }
 
@@ -61,7 +76,7 @@ export class VentasService {
   // Actualizar una venta
   async update(id: number, updateVentaDto: UpdateVentaDto): Promise<Venta> {
     const venta = await this.findOne(id); // Reutiliza findOne para verificar existencia
-    
+
     // Aplica los cambios y guarda
     this.ventaRepository.merge(venta, updateVentaDto);
     return this.ventaRepository.save(venta);
