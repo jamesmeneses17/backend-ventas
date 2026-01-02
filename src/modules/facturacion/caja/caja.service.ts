@@ -14,6 +14,7 @@ export class CajaService {
 
     create(dto: CreateMovimientoCajaDto) {
         // Mapeo manual de DTO (snake_case) a Entity (camelCase)
+        console.log('Creating MovimientoCaja:', JSON.stringify(dto));
         const data = {
             ...dto,
             tipoMovimientoId: dto.tipo_movimiento_id,
@@ -23,12 +24,15 @@ export class CajaService {
     }
 
     findAll(tipoMovimiento?: string) {
+        console.log('Finding MovimientosCaja with filter:', tipoMovimiento);
+
         const query = this.repository.createQueryBuilder('caja')
             .leftJoinAndSelect('caja.tipoMovimiento', 'tipoMovimiento')
             .orderBy('caja.fecha', 'DESC');
 
         if (tipoMovimiento) {
-            query.where('LOWER(tipoMovimiento.nombre) = LOWER(:tipo)', { tipo: tipoMovimiento });
+            // Trim and lower case comparison for robustness
+            query.where('LOWER(TRIM(tipoMovimiento.nombre)) = LOWER(TRIM(:tipo))', { tipo: tipoMovimiento });
         }
 
         return query.getMany();
@@ -82,7 +86,7 @@ export class CajaService {
         const egresosQuery = await this.repository
             .createQueryBuilder('caja')
             .select("SUM(caja.monto)", "total")
-            .where("caja.tipoMovimientoId IN (2, 3)")
+            .where("caja.tipoMovimientoId IN (2, 3, 5)")
             .andWhere("caja.fecha = :today", { today })
             .getRawOne();
 
@@ -98,7 +102,7 @@ export class CajaService {
         const result = await this.repository.createQueryBuilder('caja')
             .select("MONTH(caja.fecha)", "mesNum")
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4) THEN caja.monto ELSE 0 END)", "ingresos")
-            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 2 THEN caja.monto ELSE 0 END)", "egresos")
+            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (2, 5) THEN caja.monto ELSE 0 END)", "egresos")
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 3 THEN caja.monto ELSE 0 END)", "gastos")
             .where("YEAR(caja.fecha) = :anio", { anio })
             .groupBy("MONTH(caja.fecha)")
@@ -141,7 +145,7 @@ export class CajaService {
         const result = await this.repository.createQueryBuilder('caja')
             .select("caja.fecha", "fecha") // Fecha completa
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4) THEN caja.monto ELSE 0 END)", "ingreso")
-            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 2 THEN caja.monto ELSE 0 END)", "egreso")
+            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (2, 5) THEN caja.monto ELSE 0 END)", "egreso")
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 3 THEN caja.monto ELSE 0 END)", "gasto")
             .where("YEAR(caja.fecha) = :anio AND MONTH(caja.fecha) = :mes", { anio, mes })
             .groupBy("caja.fecha")
@@ -161,5 +165,14 @@ export class CajaService {
                 saldo: ingreso - (egreso + gasto)
             };
         });
+    }
+
+    async getAvailableYears() {
+        const result = await this.repository.createQueryBuilder('caja')
+            .select("DISTINCT YEAR(caja.fecha)", "year")
+            .orderBy("year", "DESC")
+            .getRawMany();
+
+        return result.map(r => Number(r.year));
     }
 }

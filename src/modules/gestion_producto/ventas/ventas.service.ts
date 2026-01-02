@@ -44,9 +44,11 @@ export class VentasService {
       throw new NotFoundException(`Venta con ID ${ventaGuardada.id} no encontrada después de crearla.`);
     }
 
-    // REGISTRAR MOVIMIENTO EN CAJA (Venta = ID 4)
-    // Concepto: "Cod: [CODIGO] - [NOMBRE]"
-    const concepto = `Cod: ${ventaConProducto.producto?.codigo || 'SN'} - ${ventaConProducto.producto?.nombre || 'Producto'}`;
+    // Concepto: "Cod: [CODIGO] - [NOMBRE] \n Cant: [CANTIDAD]"
+    let concepto = `Cod: ${ventaConProducto.producto?.codigo || 'SN'} - ${ventaConProducto.producto?.nombre || 'Producto'}\nCant: ${createVentaDto.cantidad}`;
+    if (concepto.length > 255) {
+      concepto = concepto.substring(0, 255);
+    }
     const totalVenta = Number(createVentaDto.cantidad) * Number(createVentaDto.precio_venta);
 
     await this.cajaService.create({

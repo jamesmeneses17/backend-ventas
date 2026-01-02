@@ -22,6 +22,11 @@ export class CajaController {
         return this.cajaService.getStats();
     }
 
+    @Get('reporte/years')
+    getAvailableYears() {
+        return this.cajaService.getAvailableYears();
+    }
+
     @Get('reporte/anual/:anio')
     getResumenAnual(@Param('anio') anio: string) {
         return this.cajaService.getResumenAnual(+anio);

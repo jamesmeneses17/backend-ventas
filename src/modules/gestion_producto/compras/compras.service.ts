@@ -79,10 +79,14 @@ export class ComprasService {
           ? Number(dtoAny.monto_total)
           : Number(data.cantidad) * Number(data.costo_unitario);
 
-        const concepto = `Compra: ${producto?.nombre || 'Producto sin nombre'} - Cant: ${data.cantidad}`;
+        // Limit concept to 255 chars to match database column constraint
+        let concepto = `Cod: ${producto?.codigo || 'SN'} - ${producto?.nombre || 'Producto sin nombre'}\nCant: ${data.cantidad}`;
+        if (concepto.length > 255) {
+          concepto = concepto.substring(0, 255);
+        }
 
         await this.cajaService.create({
-          tipo_movimiento_id: 2, // ID 2 = Egreso
+          tipo_movimiento_id: 5, // ID 5 = Egreso por Compra
           fecha: data.fecha || new Date().toISOString().split('T')[0],
           monto: monto,
           concepto: concepto,
