@@ -175,4 +175,27 @@ export class CajaService {
 
         return result.map(r => Number(r.year));
     }
+
+    async deleteByCompraDetails(criteria: { fecha: string; monto: number; concepto: string; tipo_movimiento_id: number }) {
+        // Encontrar movimiento que coincida con los criterios
+        // Usamos where con parámetros para evitar inyeccion y asegurar tipos
+        // Nota: El concepto podría tener variaciones leves en saltos de linea o espacios, pero intentamos match exacto primero.
+        // Si el concepto es muy largo, cortamos a 255 chars antes de llamar a este metodo.
+
+        const movimiento = await this.repository.findOne({
+            where: {
+                fecha: criteria.fecha,
+                monto: criteria.monto,
+                concepto: criteria.concepto,
+                tipoMovimientoId: criteria.tipo_movimiento_id
+            }
+        });
+
+        if (movimiento) {
+            console.log("Eliminando movimiento de caja asociado:", movimiento.id);
+            await this.repository.remove(movimiento);
+        } else {
+            console.warn("No se encontró movimiento de caja para eliminar con criterios:", JSON.stringify(criteria));
+        }
+    }
 }

@@ -217,6 +217,44 @@ export class ComprasService {
   // ===== ELIMINAR =====
   async remove(id: number) {
     const compra = await this.findOne(id);
+
+    // 1. Eliminar movimiento de caja asociado (Heurística: buscar por fecha, monto, concepto y tipo)
+    // Reconstruir el concepto como se hace en create
+    let concepto = `Cod: ${compra.producto?.codigo || 'SN'} - ${compra.producto?.nombre || 'Producto sin nombre'}\nCant: ${compra.cantidad}`;
+    if (concepto.length > 255) {
+      concepto = concepto.substring(0, 255);
+    }
+
+    const monto = Number(compra.cantidad) * Number(compra.costo_unitario);
+
+    // Buscar movimiento similar
+    const fechaCompra = typeof compra.fecha === 'string'
+      ? compra.fecha
+      : (compra.fecha as Date).toISOString().split('T')[0];
+
+    try {
+      // Debemos buscar manualmente porque 'cajaService' no expone método específico 'deleteByCriteria'
+      // Pero idealmente cajaService debería tener un delete o findOne para esto.
+      // Dado que no puedo modificar facilmente cajaService sin ver su archivo, intentaré usar 'cajaService.repository' si es público o llamar un método.
+      // Asumiendo que cajaService es un wrapper standard, veré si puedo acceder al repositorio o si necesito agregar un método en CajaService.
+      // Por ahora, como 'cajaService' se inyecta y probablemente usa TypeORM, verificamos si tiene un método expuesto.
+      // Al ver `caja.service.ts` importado, asumiré que necesito un método 'deleteByCriteria' o similar en CajaService.
+      // Pero primero voy a implementar la logica aqui si tengo acceso al repositorio de MovimientoCaja, pero NO LO TENGO inyectado aqui.
+      // Tengo 'cajaService'.
+
+      // Mejor enfoque: Agregar método `deleteByCompraDetails` en CajaService y llamarlo aquí.
+      await this.cajaService.deleteByCompraDetails({
+        fecha: fechaCompra,
+        monto: monto,
+        concepto: concepto,
+        tipo_movimiento_id: 5
+      });
+
+    } catch (error) {
+      console.warn('No se pudo eliminar el movimiento de caja asociado a la compra:', error);
+    }
+
+    // 2. Eliminar la compra
     return this.compraRepo.remove(compra);
   }
 }
