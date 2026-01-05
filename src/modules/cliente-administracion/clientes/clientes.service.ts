@@ -12,7 +12,7 @@ export class ClientesService {
   constructor(
     @InjectRepository(Cliente)
     private readonly clienteRepository: Repository<Cliente>,
-  ) {}
+  ) { }
 
   async create(createClienteDto: CreateClienteDto): Promise<Cliente> {
     const cliente = this.clienteRepository.create(createClienteDto);
@@ -23,17 +23,17 @@ export class ClientesService {
   async findAll(): Promise<Cliente[]> {
     // Usamos 'relations' para incluir los datos de la entidad relacionada
     return this.clienteRepository.find({
-        relations: ['tipoDocumento'] // Carga la entidad TipoDocumento
-    }); 
+      relations: ['tipoDocumento', 'tipoContacto'] // Carga la entidad TipoDocumento y TipoContacto
+    });
   }
 
   // OBTENER UNO (findOne) - CON RELACIÓN
   async findOne(id: number): Promise<Cliente> {
-    const cliente = await this.clienteRepository.findOne({ 
-        where: { id },
-        relations: ['tipoDocumento'] // Carga la entidad TipoDocumento
+    const cliente = await this.clienteRepository.findOne({
+      where: { id },
+      relations: ['tipoDocumento', 'tipoContacto'] // Carga la entidad TipoDocumento y TipoContacto
     });
-    
+
     if (!cliente) {
       throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
     }
@@ -41,9 +41,21 @@ export class ClientesService {
   }
 
   async update(id: number, updateClienteDto: UpdateClienteDto): Promise<Cliente> {
-    const cliente = await this.findOne(id); 
-    const updatedCliente = this.clienteRepository.merge(cliente, updateClienteDto);
-    return this.clienteRepository.save(updatedCliente);
+    // 1. Buscamos el cliente sin relaciones para evitar conflictos de objetos
+    const cliente = await this.clienteRepository.findOne({ where: { id } });
+
+    if (!cliente) {
+      throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
+    }
+
+    // 2. Aplicamos los cambios del DTO al objeto cliente
+    // Al no tener la relación cargada como objeto, el ID se actualizará sin problemas
+    this.clienteRepository.merge(cliente, updateClienteDto);
+
+    // 3. Guardamos y retornamos el cliente con sus relaciones actualizadas
+    await this.clienteRepository.save(cliente);
+
+    return this.findOne(id); // Retornamos el cliente refrescado con sus nombres de tipos
   }
 
   async remove(id: number): Promise<void> {

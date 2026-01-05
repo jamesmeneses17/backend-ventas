@@ -1,7 +1,8 @@
-// src/clientes/entities/cliente.entity.ts (Actualizado)
+// src/clientes/entities/cliente.entity.ts
 
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { TipoDocumento } from '../../tipos-documento/entities/tipos-documento.entity';
+import { TipoContactoCliente } from '../../tipo-contacto-cliente/entities/tipo-contacto-cliente.entity';
 
 @Entity('clientes')
 export class Cliente {
@@ -11,25 +12,31 @@ export class Cliente {
   @Column({ length: 150 })
   nombre: string;
 
-  // Clave foránea al Tipo de Documento
-  @Column({ name: 'tipo_documento_id' })
-  tipo_documento_id: number; 
+  // 1. COLUMNA FÍSICA: Usada para guardar y actualizar (Merge del DTO)
+  @Column({ name: 'tipo_contacto_id', nullable: true })
+  tipo_contacto_id: number; //
 
-  @Column({ length: 20, unique: true })
+  // 2. PROPIEDAD DE RELACIÓN: Usada para traer los datos con JOIN
+  @ManyToOne(() => TipoContactoCliente, (tipo) => tipo.clientes)
+  @JoinColumn({ name: 'tipo_contacto_id' }) // Vincula esta relación con la columna de arriba
+  tipoContacto: TipoContactoCliente; //
+
+  @Column({ name: 'tipo_documento_id' })
+  tipo_documento_id: number;
+
+  @ManyToOne(() => TipoDocumento, (tipoDocumento) => tipoDocumento.clientes)
+  @JoinColumn({ name: 'tipo_documento_id' })
+  tipoDocumento: TipoDocumento;
+
+  @Column({ length: 30, unique: true })
   numero_documento: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ length: 200, nullable: true })
   direccion: string;
 
   @Column({ length: 100, nullable: true })
   correo: string;
 
-  @Column({ length: 15, nullable: true })
+  @Column({ length: 20, nullable: true })
   telefono: string;
-
-  // RELACIÓN MANY TO ONE
-  // Un cliente tiene un TipoDocumento
-  @ManyToOne(() => TipoDocumento, tipoDocumento => tipoDocumento.clientes)
-  @JoinColumn({ name: 'tipo_documento_id' }) // Especificamos la columna de unión
-  tipoDocumento: TipoDocumento;
 }

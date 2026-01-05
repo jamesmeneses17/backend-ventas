@@ -32,6 +32,7 @@ import { PedidoOnline } from './modules/facturacion/pedidos-online/entities/pedi
 import { PedidosOnlineModule } from './modules/facturacion/pedidos-online/pedidos-online.module';
 import { CajaModule } from './modules/facturacion/caja/caja.module';
 import { TiposMovimientoModule } from './modules/catalogos_basicos/tipos-movimiento/tipos-movimiento.module';
+import { TipoContactoClienteModule } from './modules/cliente-administracion/tipo-contacto-cliente/tipo-contacto-cliente.module';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
@@ -74,7 +75,8 @@ import { TiposMovimientoModule } from './modules/catalogos_basicos/tipos-movimie
     PagosCreditoModule,
     PedidosOnlineModule,
     TiposMovimientoModule,
-    CajaModule
+    CajaModule,
+    TipoContactoClienteModule
   ],
   controllers: [AppController],
   providers: [AppService],
