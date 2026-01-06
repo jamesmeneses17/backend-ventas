@@ -10,6 +10,7 @@ import { CompraDetalle } from './entities/compra-detalle.entity';
 import { Producto } from '../productos/entities/producto.entity';
 import { Inventario } from '../inventario/entities/inventario.entity';
 import { CajaService } from '../../facturacion/caja/caja.service';
+import { MovimientoCaja } from '../../facturacion/caja/entities/movimiento-caja.entity';
 
 @Injectable()
 export class ComprasService {
@@ -22,8 +23,10 @@ export class ComprasService {
     private readonly productoRepo: Repository<Producto>,
     @InjectRepository(Inventario)
     private readonly inventarioRepo: Repository<Inventario>,
+    @InjectRepository(MovimientoCaja) // Inyectar repo para buscar movimiento específico
+    private readonly cajaRepo: Repository<MovimientoCaja>,
     private readonly cajaService: CajaService,
-    private readonly dataSource: DataSource, // Inyectado para manejar transacciones
+    private readonly dataSource: DataSource,
   ) { }
 
   // ===== CREAR COMPRA (CABECERA + DETALLES) =====
@@ -72,7 +75,7 @@ export class ComprasService {
         const stockActual = producto.inventario?.stock ?? 0;
         const comprasActual = producto.inventario?.compras ?? 0;
 
-        await queryRunner.manager.update(Inventario, { producto_id: producto.id }, {
+        await queryRunner.manager.update(Inventario, { productoId: producto.id }, {
           stock: stockActual + item.cantidad,
           compras: comprasActual + item.cantidad,
         });
@@ -96,7 +99,7 @@ export class ComprasService {
       });
 
       await queryRunner.commitTransaction();
-      return this.findOne(compraGuardada.id); // Retorna la compra con todas sus relaciones
+      return this.findOne(compraGuardada.id);
 
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -109,7 +112,7 @@ export class ComprasService {
   // ===== LISTAR TODAS LAS COMPRAS =====
   findAll() {
     return this.compraRepo.find({
-      relations: ['cliente', 'detalles', 'detalles.producto'], // Trae toda la jerarquía
+      relations: ['cliente', 'detalles', 'detalles.producto'],
       order: { id: 'DESC' },
     });
   }
@@ -125,24 +128,171 @@ export class ComprasService {
     return compra;
   }
 
-  // ===== ACTUALIZAR (SOLO CABECERA) =====
+  // ===== ACTUALIZAR COMPRA (CABECERA + DETALLES + INVENTARIO + CAJA) =====
   async update(id: number, dto: UpdateCompraDto) {
-    const compra = await this.findOne(id);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // Solo actualizamos datos de cabecera como fecha o cliente
-    const dataActualizada = {
-      ...compra,
-      ...dto,
-      fecha: dto.fecha ? String(dto.fecha).split('T')[0] : compra.fecha,
-    };
+    try {
+      // 1. Obtener la compra actual con sus detalles para revertir inventario
+      const compraActual = await this.compraRepo.findOne({
+        where: { id },
+        relations: ['detalles', 'detalles.producto', 'detalles.producto.inventario'],
+      });
 
-    return this.compraRepo.save(dataActualizada);
+      if (!compraActual) throw new NotFoundException(`Compra #${id} no encontrada`);
+
+      // 2. Revertir Inventario de los items viejos
+      if (compraActual.detalles && compraActual.detalles.length > 0) {
+        for (const detalle of compraActual.detalles) {
+          const producto = detalle.producto;
+          if (producto && producto.inventario) {
+            const stockActual = producto.inventario.stock;
+            const comprasActual = producto.inventario.compras;
+            // Restar lo que se había sumado
+            await queryRunner.manager.update(Inventario, { productoId: producto.id }, {
+              stock: stockActual - detalle.cantidad,
+              compras: Math.max(0, comprasActual - detalle.cantidad),
+            });
+          }
+        }
+        // Eliminar detalles anteriores
+        await queryRunner.manager.delete(CompraDetalle, { compra_id: id });
+      }
+
+      // 3. Procesar Nuevos Items (Si el DTO tiene items)
+      // Si el DTO no trae items, asumimos que no se quieren cambiar (aunque en este caso 'items' es array en el DTO, si viene vacío borraría todo)
+      // Asumiremos que el frontend siempre manda el carrito completo.
+      let nuevoTotal = 0;
+      let nuevosItemsCount = 0;
+
+      if (dto.items && dto.items.length > 0) {
+        nuevoTotal = dto.items.reduce((acc, item) => acc + (Number(item.cantidad) * Number(item.costo_unitario)), 0);
+        nuevosItemsCount = dto.items.length;
+
+        for (const item of dto.items) {
+          const subtotal = Number(item.cantidad) * Number(item.costo_unitario);
+
+          // Insertar nuevo detalle
+          const nuevoDetalle = this.detalleRepo.create({
+            compra_id: id,
+            producto_id: item.producto_id,
+            cantidad: item.cantidad,
+            costo_unitario: item.costo_unitario,
+            subtotal: subtotal
+          });
+          await queryRunner.manager.save(nuevoDetalle);
+
+          // Actualizar Inventario (Sumar nueva cantidad)
+          const producto = await this.productoRepo.findOne({ where: { id: item.producto_id }, relations: ['inventario'] });
+          if (producto) {
+            const stockActual = producto.inventario?.stock ?? 0;
+            const comprasActual = producto.inventario?.compras ?? 0;
+            await queryRunner.manager.update(Inventario, { productoId: producto.id }, {
+              stock: stockActual + item.cantidad,
+              compras: comprasActual + item.cantidad
+            });
+
+            // Recalcular Precio Costo (Simplificado: Promedio con historial, RECALCULO DE COSTO COMPLEJO OMITIDO POR SIMPLICIDAD, SE MANTIENE UPDATE SIMPLE)
+            // Nota: Para ser exactos, deberíamos haber eliminado el impacto del costo anterior, pero eso requiere historial completo.
+            // Actualizamos con el nuevo dato entrante.
+            await queryRunner.manager.update(Producto, producto.id, {
+              precio_costo: item.costo_unitario // Actualizamos precios costo al último o promedio si se desea
+            });
+          }
+        }
+      } else {
+        // Si items viene vacío, el nuevo total es 0
+        nuevoTotal = 0;
+      }
+
+      // 4. Actualizar Cabecera
+      const fechaFinal = dto.fecha ? String(dto.fecha).split('T')[0] : compraActual.fecha;
+      await queryRunner.manager.update(Compra, id, {
+        fecha: fechaFinal,
+        clienteId: dto.cliente_id ?? compraActual.clienteId,
+        total: nuevoTotal
+      });
+
+      // 5. Actualizar Movimiento de Caja asociado
+      // Buscamos movimiento por concepto (esto es frágil, idealmente guardar caja_id en compra, pero usaremos fecha y monto aprox o patrón string)
+      // O buscamos el último movimiento de tipo 5 que coincida en fecha y monto (aproximación)
+      // MEJOR: Actualizar cajaService para soportar update o buscar por referencia si estuviera.
+      // Como no tenemos Link ID, intentaremos buscar por la referencia en el concepto.
+      const movimiento = await this.cajaRepo.createQueryBuilder('caja')
+        .where("concepto LIKE :ref", { ref: `%Compra Ref: ${id}%` })
+        .andWhere("tipo_movimiento_id = 5")
+        .getOne();
+
+      if (movimiento) {
+        await queryRunner.manager.update(MovimientoCaja, movimiento.id, {
+          monto: nuevoTotal,
+          fecha: fechaFinal,
+          concepto: `Compra Ref: ${id} - Proveedor ID: ${dto.cliente_id ?? compraActual.clienteId} - Items: ${nuevosItemsCount}`
+        });
+      }
+
+      await queryRunner.commitTransaction();
+      return this.findOne(id);
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      console.error("Error updating compra:", error);
+      throw new BadRequestException('Error al actualizar la compra: ' + error.message);
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   // ===== ELIMINAR COMPRA =====
   async remove(id: number) {
-    const compra = await this.findOne(id);
-    // Nota: El ON DELETE CASCADE en la BD borrará automáticamente los detalles
-    return this.compraRepo.remove(compra);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const compra = await this.findOne(id);
+
+      // 1. Revertir Inventario
+      if (compra.detalles) {
+        for (const detalle of compra.detalles) {
+          const producto = detalle.producto;
+          // Necesitamos cargar inventario si no vino en el findOne (findOne trae producto pero a veces no inventario deep)
+          // Hacemos un fetch rápido si es necesario, o confiamos en que TypeORM cargue si está en relations.
+          // El findOne actual trae 'detalles.producto', pero no 'detalles.producto.inventario'.
+          const prodWithInv = await this.productoRepo.findOne({ where: { id: producto.id }, relations: ['inventario'] });
+
+          if (prodWithInv && prodWithInv.inventario) {
+            await queryRunner.manager.update(Inventario, { productoId: producto.id }, {
+              stock: prodWithInv.inventario.stock - detalle.cantidad,
+              compras: Math.max(0, prodWithInv.inventario.compras - detalle.cantidad)
+            });
+          }
+        }
+      }
+
+      // 2. Eliminar Movimiento de Caja
+      const movimiento = await this.cajaRepo.createQueryBuilder('caja')
+        .where("concepto LIKE :ref", { ref: `%Compra Ref: ${id}%` })
+        .andWhere("tipo_movimiento_id = 5")
+        .getOne();
+
+      if (movimiento) {
+        await queryRunner.manager.remove(movimiento);
+      }
+
+      // 3. Eliminar Compra (Cascade borrará detalles)
+      await queryRunner.manager.remove(compra);
+
+      await queryRunner.commitTransaction();
+      return { message: `Compra #${id} eliminada correctamente` };
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw new BadRequestException('Error al eliminar compra: ' + error.message);
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
