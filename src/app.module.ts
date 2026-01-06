@@ -76,7 +76,9 @@ import { TipoContactoClienteModule } from './modules/cliente-administracion/tipo
     PedidosOnlineModule,
     TiposMovimientoModule,
     CajaModule,
-    TipoContactoClienteModule
+    TipoContactoClienteModule,
+    ComprasModule,
+    ClientesModule
   ],
   controllers: [AppController],
   providers: [AppService],

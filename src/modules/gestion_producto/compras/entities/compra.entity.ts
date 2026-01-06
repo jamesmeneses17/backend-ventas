@@ -1,39 +1,37 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
-import { Producto } from '../../productos/entities/producto.entity';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { CompraDetalle } from './compra-detalle.entity';
+import { Cliente } from 'src/modules/cliente-administracion/clientes/entities/cliente.entity';
 
-@Entity('compras')
+@Entity('compras_cabecera') //
 export class Compra {
     @PrimaryGeneratedColumn()
     id: number;
-    @Column({ type: 'date' })
+
+    @Column({ type: 'date', nullable: true })
     fecha: string;
 
     // ========================
-    //     RELACIÓN PRODUCTO
+    //    RELACIÓN CON CONTACTO (PROVEEDOR)
     // ========================
-    @Column({ name: 'producto_id' })
-    productoId: number;
+    @Column({ name: 'cliente_id' }) //
+    clienteId: number;
 
-    @ManyToOne(() => Producto, (producto) => producto.compras, {
-        onDelete: 'CASCADE',
+    @ManyToOne(() => Cliente) //
+    @JoinColumn({ name: 'cliente_id' })
+    cliente: Cliente;
+
+    // ========================
+    //    CAMPOS TOTALES
+    // ========================
+    @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+    total: number; //
+
+    // ========================
+    //    RELACIÓN CON LOS DETALLES (PRODUCTOS)
+    // ========================
+    // Esta relación permite acceder a todos los productos de esta compra
+    @OneToMany(() => CompraDetalle, (detalle) => detalle.compra, {
+        cascade: true // Permite guardar cabecera y detalles al mismo tiempo
     })
-    @JoinColumn({ name: 'producto_id' })
-    producto: Producto;
-
-    // ========================
-    //     RELACIÓN CATEGORÍA
-    // ========================
-    // Mantener solo la columna categoria_id (sin relación) para mantener compatibilidad con la BD.
-    // Se llena automáticamente en el backend a partir del producto si no viene desde el front.
-    @Column({ name: 'categoria_id', type: 'int', nullable: true })
-    categoriaId?: number;
-
-    // ========================
-    //     CAMPOS PROPIOS
-    // ========================
-    @Column({ type: 'int' })
-    cantidad: number;
-
-    @Column({ type: 'decimal', precision: 12, scale: 2 })
-    costo_unitario: number;
+    detalles: CompraDetalle[];
 }
