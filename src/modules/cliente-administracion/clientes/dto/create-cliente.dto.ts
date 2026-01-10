@@ -29,4 +29,8 @@ export class CreateClienteDto {
     @IsNumber({}, { message: 'El tipo de contacto debe ser un número.' })
     @IsNotEmpty({ message: 'El tipo de contacto es obligatorio.' })
     tipo_contacto_id: number;
+
+    @IsNumber({}, { message: 'El tipo de persona debe ser un número.' })
+    @IsOptional()
+    tipo_persona_id: number;
 }

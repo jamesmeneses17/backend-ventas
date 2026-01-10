@@ -23,7 +23,8 @@ export class ClientesService {
   async findAll(): Promise<Cliente[]> {
     // Usamos 'relations' para incluir los datos de la entidad relacionada
     return this.clienteRepository.find({
-      relations: ['tipoDocumento', 'tipoContacto'] // Carga la entidad TipoDocumento y TipoContacto
+      relations: ['tipoDocumento', 'tipoContacto', 'tipoPersona'], // Carga la entidad TipoDocumento y TipoContacto
+      order: { id: 'DESC' }, // Ordenar por ID descendente (nuevos primero)
     });
   }
 
@@ -31,7 +32,7 @@ export class ClientesService {
   async findOne(id: number): Promise<Cliente> {
     const cliente = await this.clienteRepository.findOne({
       where: { id },
-      relations: ['tipoDocumento', 'tipoContacto'] // Carga la entidad TipoDocumento y TipoContacto
+      relations: ['tipoDocumento', 'tipoContacto', 'tipoPersona'] // Carga la entidad TipoDocumento y TipoContacto
     });
 
     if (!cliente) {

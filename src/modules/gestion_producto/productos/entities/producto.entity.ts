@@ -5,7 +5,8 @@ import { Inventario } from '../../inventario/entities/inventario.entity';
 import { Estado } from '../../../catalogos_basicos/estados/entities/estado.entity';
 import { Categoria } from '../../../catalogos_basicos/categorias/entities/categoria.entity';
 import { Precio } from '../../precios/entities/precio.entity';
-import { CompraDetalle } from '../../compras/entities/compra-detalle.entity'; // CAMBIO AQUÍ
+import { CompraDetalle } from '../../compras/entities/compra-detalle.entity';
+import { VentaDetalle } from '../../ventas/entities/venta-detalle.entity'; // ✅ NUEVA IMPORTACIÓN
 import { Subcategoria } from '../../../catalogos_basicos/subcategorias/entities/subcategoria.entity';
 import { ProductoImagen } from './producto-imagen.entity';
 
@@ -64,7 +65,7 @@ export class Producto {
   subcategoria: Subcategoria | null;
 
   // ==========================================
-  // RELACIONES ACTUALIZADAS (CABECERA -> DETALLE)
+  // RELACIONES ACTUALIZADAS
   // ==========================================
 
   @OneToOne(() => Inventario, (inv) => inv.producto)
@@ -73,11 +74,13 @@ export class Producto {
   @OneToMany(() => Precio, (precio) => precio.producto)
   precios: Precio[];
 
-  // ✅ Ahora el producto se relaciona con los DETALLES de compras
+  // ✅ Relación con los DETALLES de compras
   @OneToMany(() => CompraDetalle, (detalle) => detalle.producto)
   compras: CompraDetalle[];
 
-
+  // ✅ Relación con los DETALLES de ventas
+  @OneToMany(() => VentaDetalle, (detalle) => detalle.producto)
+  ventas: VentaDetalle[];
 
   @OneToMany(() => ProductoImagen, (imagen) => imagen.producto, { cascade: true })
   imagenes: ProductoImagen[];

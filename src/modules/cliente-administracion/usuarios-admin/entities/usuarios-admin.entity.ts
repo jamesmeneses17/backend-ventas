@@ -8,7 +8,9 @@ export class UsuarioAdmin {
     @Column()
     nombre: string;
 
-    @Column({ unique: true })
+    // ❌ quitamos unique:true
+    // ✔ permitimos NULL para evitar problemas
+    @Column({ nullable: true })
     correo: string;
 
     @Column()

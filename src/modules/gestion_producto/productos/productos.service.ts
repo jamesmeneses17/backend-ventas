@@ -17,12 +17,12 @@ import { PreciosService } from '../precios/precios.service';
 
 import * as ExcelJS from 'exceljs';
 import { Buffer } from 'buffer';
-  /**
-   * Exporta productos a un archivo Excel (.xlsx)
-   * @param filtros Opcional: filtros para la consulta (puedes expandir según necesidad)
-   * @returns Buffer del archivo Excel
-   */
- 
+/**
+ * Exporta productos a un archivo Excel (.xlsx)
+ * @param filtros Opcional: filtros para la consulta (puedes expandir según necesidad)
+ * @returns Buffer del archivo Excel
+ */
+
 
 // 📌 UMBRAL FIJO DE STOCK MÍNIMO
 const MIN_STOCK_THRESHOLD = 5;
@@ -34,7 +34,7 @@ export interface PaginacionResponse<T> {
 }
 
 
-export type ProductoConStockCalculado = Omit<Producto, 'compras'> & {
+export type ProductoConStockCalculado = Omit<Producto, 'compras' | 'ventas'> & {
   stock: number;
   precio: number;
   precio_venta: number;
@@ -60,9 +60,9 @@ export class ProductosService {
     private readonly inventarioService: InventarioService,
     private readonly preciosService: PreciosService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
- async exportarProductosExcel(): Promise<Buffer> {
+  async exportarProductosExcel(): Promise<Buffer> {
     // 1. Consulta de todos los productos sin filtros
     const productos = await this.productosRepo.createQueryBuilder('producto')
       .leftJoinAndSelect('producto.categoria', 'categoria')
@@ -135,113 +135,113 @@ export class ProductosService {
     return { deleted: true };
   }
 
-async getAllProductos(
-  page: number = 1,
-  limit: number = 5,
-  search: string = '',
-  estado_stock: string = '',
-): Promise<PaginacionResponse<ProductoConStockCalculado>> {
-  // 1. Construir query base
-  const query = this.productosRepo.createQueryBuilder('producto');
-  query
-    .leftJoinAndSelect('producto.estado', 'estado')
-    .leftJoinAndSelect('producto.categoria', 'categoriaDirecta')
-    .leftJoinAndSelect('producto.subcategoria', 'subcategoria')
-    .leftJoinAndSelect('subcategoria.categoria', 'categoria')
-    .leftJoinAndSelect('producto.inventario', 'inventario')
-    .leftJoinAndSelect('producto.precios', 'precios', 'precios.fecha_fin IS NULL')
-    .leftJoinAndSelect('producto.imagenes', 'imagenes')
-    .orderBy('producto.id', 'DESC')
-    .addOrderBy('imagenes.orden', 'ASC');
+  async getAllProductos(
+    page: number = 1,
+    limit: number = 5,
+    search: string = '',
+    estado_stock: string = '',
+  ): Promise<PaginacionResponse<ProductoConStockCalculado>> {
+    // 1. Construir query base
+    const query = this.productosRepo.createQueryBuilder('producto');
+    query
+      .leftJoinAndSelect('producto.estado', 'estado')
+      .leftJoinAndSelect('producto.categoria', 'categoriaDirecta')
+      .leftJoinAndSelect('producto.subcategoria', 'subcategoria')
+      .leftJoinAndSelect('subcategoria.categoria', 'categoria')
+      .leftJoinAndSelect('producto.inventario', 'inventario')
+      .leftJoinAndSelect('producto.precios', 'precios', 'precios.fecha_fin IS NULL')
+      .leftJoinAndSelect('producto.imagenes', 'imagenes')
+      .orderBy('producto.id', 'DESC')
+      .addOrderBy('imagenes.orden', 'ASC');
 
-  if (search) {
-    query.andWhere(
-      '(producto.nombre LIKE :search OR producto.codigo LIKE :search)',
-      { search: `%${search}%` },
-    );
+    if (search) {
+      query.andWhere(
+        '(producto.nombre LIKE :search OR producto.codigo LIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    // 2. Obtener resultados de base de datos
+    const productosRaw = await query.getMany();
+
+    // 3. Calcular stock y usar precio de costo (NO precio de venta)
+    const productosCalculados = productosRaw.map((p) => {
+      const inventarioRegistro = p.inventario;
+      const stockActual = inventarioRegistro?.stock ?? 0;
+      const stockMinimo = MIN_STOCK_THRESHOLD;
+
+      let estadoStock: 'Disponible' | 'Stock Bajo' | 'Agotado';
+      if (stockActual === 0) estadoStock = 'Agotado';
+      else if (stockActual <= stockMinimo) estadoStock = 'Stock Bajo';
+      else estadoStock = 'Disponible';
+
+      const precioActual = p.precio_costo ?? 0;
+      const precioVentaActual = p.precios?.[0]?.valor_unitario ?? p.precio_venta ?? 0;
+      const promocionPorcentaje = Number(p.promocion_porcentaje ?? 0);
+      const precioConDescuento = promocionPorcentaje > 0 ? precioVentaActual - (precioVentaActual * promocionPorcentaje) / 100 : precioVentaActual;
+      const utilidad = precioConDescuento - precioActual;
+      const valorInventario = precioActual * stockActual;
+
+      return {
+        ...p,
+        categoria: p.subcategoria?.categoria?.nombre ?? (p as any).categoria?.nombre ?? null,
+        subcategoria_id: p.subcategoriaId,
+        stock: stockActual,
+        precio: precioActual,
+        precio_venta: precioVentaActual,
+        estado_stock: estadoStock,
+        stockMinimo,
+        compras: inventarioRegistro?.compras ?? 0,
+        ventas: inventarioRegistro?.ventas ?? 0,
+        ubicacion: inventarioRegistro?.ubicacion ?? null,
+        promocion_porcentaje: promocionPorcentaje,
+        precio_con_descuento: precioConDescuento,
+        utilidad: utilidad,
+        valor_inventario: valorInventario,
+      };
+    });
+
+    // 4. Filtrar por estado_stock si aplica
+    let productosFiltrados = productosCalculados;
+    if (estado_stock && estado_stock !== '') {
+      productosFiltrados = productosCalculados.filter(
+        (p) => p.estado_stock === estado_stock,
+      );
+    }
+
+    // 5. Paginación
+    const total = productosFiltrados.length;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const paginados = productosFiltrados.slice(start, end);
+
+    return { data: paginados, total };
   }
 
-  // 2. Obtener resultados de base de datos
-  const productosRaw = await query.getMany();
 
-  // 3. Calcular stock y usar precio de costo (NO precio de venta)
-  const productosCalculados = productosRaw.map((p) => {
-    const inventarioRegistro = p.inventario;
-    const stockActual = inventarioRegistro?.stock ?? 0;
-    const stockMinimo = MIN_STOCK_THRESHOLD;
+  // Estadísticas globales de productos por estado_stock
+  async getStats() {
+    // Obtener todos los productos y calcular estado_stock
+    const productosRaw = await this.productosRepo.createQueryBuilder('producto')
+      .leftJoinAndSelect('producto.inventario', 'inventario')
+      .leftJoinAndSelect('producto.precios', 'precios', 'precios.fecha_fin IS NULL')
+      .getMany();
 
-    let estadoStock: 'Disponible' | 'Stock Bajo' | 'Agotado';
-    if (stockActual === 0) estadoStock = 'Agotado';
-    else if (stockActual <= stockMinimo) estadoStock = 'Stock Bajo';
-    else estadoStock = 'Disponible';
-
-    const precioActual = p.precio_costo ?? 0;
-    const precioVentaActual = p.precios?.[0]?.valor_unitario ?? p.precio_venta ?? 0;
-    const promocionPorcentaje = Number(p.promocion_porcentaje ?? 0);
-    const precioConDescuento = promocionPorcentaje > 0 ? precioVentaActual - (precioVentaActual * promocionPorcentaje) / 100 : precioVentaActual;
-    const utilidad = precioConDescuento - precioActual;
-    const valorInventario = precioActual * stockActual;
-
-    return {
-      ...p,
-      categoria: p.subcategoria?.categoria?.nombre ?? (p as any).categoria?.nombre ?? null,
-      subcategoria_id: p.subcategoriaId,
-      stock: stockActual,
-      precio: precioActual,
-      precio_venta: precioVentaActual,
-      estado_stock: estadoStock,
-      stockMinimo,
-      compras: inventarioRegistro?.compras ?? 0,
-      ventas: inventarioRegistro?.ventas ?? 0,
-      ubicacion: inventarioRegistro?.ubicacion ?? null,
-      promocion_porcentaje: promocionPorcentaje,
-      precio_con_descuento: precioConDescuento,
-      utilidad: utilidad,
-      valor_inventario: valorInventario,
-    };
-  });
-
-  // 4. Filtrar por estado_stock si aplica
-  let productosFiltrados = productosCalculados;
-  if (estado_stock && estado_stock !== '') {
-    productosFiltrados = productosCalculados.filter(
-      (p) => p.estado_stock === estado_stock,
-    );
+    // Calcular estado_stock para cada producto
+    let total = 0, stockBajo = 0, agotado = 0;
+    for (const p of productosRaw) {
+      const inventarioRegistro = p.inventario;
+      const stockActual = inventarioRegistro?.stock ?? 0;
+      let estadoStock: 'Disponible' | 'Stock Bajo' | 'Agotado';
+      if (stockActual === 0) estadoStock = 'Agotado';
+      else if (stockActual <= MIN_STOCK_THRESHOLD) estadoStock = 'Stock Bajo';
+      else estadoStock = 'Disponible';
+      total++;
+      if (estadoStock === 'Stock Bajo') stockBajo++;
+      if (estadoStock === 'Agotado') agotado++;
+    }
+    return { total, stockBajo, agotado };
   }
-
-  // 5. Paginación
-  const total = productosFiltrados.length;
-  const start = (page - 1) * limit;
-  const end = start + limit;
-  const paginados = productosFiltrados.slice(start, end);
-
-  return { data: paginados, total };
-}
-
-
-      // Estadísticas globales de productos por estado_stock
-      async getStats() {
-          // Obtener todos los productos y calcular estado_stock
-          const productosRaw = await this.productosRepo.createQueryBuilder('producto')
-              .leftJoinAndSelect('producto.inventario', 'inventario')
-              .leftJoinAndSelect('producto.precios', 'precios', 'precios.fecha_fin IS NULL')
-              .getMany();
-
-          // Calcular estado_stock para cada producto
-          let total = 0, stockBajo = 0, agotado = 0;
-          for (const p of productosRaw) {
-              const inventarioRegistro = p.inventario;
-              const stockActual = inventarioRegistro?.stock ?? 0;
-              let estadoStock: 'Disponible' | 'Stock Bajo' | 'Agotado';
-              if (stockActual === 0) estadoStock = 'Agotado';
-              else if (stockActual <= MIN_STOCK_THRESHOLD) estadoStock = 'Stock Bajo';
-              else estadoStock = 'Disponible';
-              total++;
-              if (estadoStock === 'Stock Bajo') stockBajo++;
-              if (estadoStock === 'Agotado') agotado++;
-          }
-          return { total, stockBajo, agotado };
-      }
   // 🔹 CREATE
   async create(dto: CreateProductoDto): Promise<Producto> {
     const { stock, ubicacion, precio, precio_venta, codigo, nombre, precio_costo, valor_unitario_inicial, ...productoData } = dto as any;
@@ -372,8 +372,8 @@ async getAllProductos(
   // 🔹 UPDATE
   async update(id: number, dto: UpdateProductoDto): Promise<Producto> {
     // Cargar la entidad existente SIN eager loading de relaciones para evitar conflictos
-    const producto = await this.productosRepo.findOne({ 
-      where: { id }, 
+    const producto = await this.productosRepo.findOne({
+      where: { id },
       relations: [] // No cargar relaciones para evitar problemas con el save
     });
     if (!producto) throw new NotFoundException(`Producto con ID ${id} no encontrado para actualizar.`);
@@ -383,7 +383,7 @@ async getAllProductos(
     const anyDto: any = dto as any;
     const hasSubcategoriaProp = Object.prototype.hasOwnProperty.call(anyDto, 'subcategoriaId')
       || Object.prototype.hasOwnProperty.call(anyDto, 'subcategoria_id');
-    const hasCategoriaProp = Object.prototype.hasOwnProperty.call(anyDto, 'categoriaId') 
+    const hasCategoriaProp = Object.prototype.hasOwnProperty.call(anyDto, 'categoriaId')
       || Object.prototype.hasOwnProperty.call(anyDto, 'categoria_id');
 
     // Asignar propiedades básicas (excepto las FK que manejamos después)
@@ -435,9 +435,9 @@ async getAllProductos(
       } else {
         catId = Number(rawCatId);
       }
-      
+
       this.logger.log(`[updateProducto] categoriaId recibido=${JSON.stringify(rawCatId)} → procesado: ${JSON.stringify(catId)} (tipo: ${typeof catId})`);
-      
+
       if (catId === null) {
         (producto as any).categoriaId = null;
         this.logger.log(`[updateProducto] ✅ Desvinculando categoría (NULL)`);
@@ -454,7 +454,7 @@ async getAllProductos(
     // 🔥 GUARDAR - Usar QueryBuilder con valores explícitos del DTO procesado
     // Construir el objeto de actualización SOLO con lo que vino en el DTO
     const updateData: any = {};
-    
+
     // Copiar SOLO las propiedades que vinieron en el DTO (excepto id y FKs que manejamos especialmente)
     for (const key of Object.keys(anyDto)) {
       if (['id', 'subcategoriaId', 'categoriaId', 'subcategoria_id', 'categoria_id'].includes(key)) continue;
@@ -477,7 +477,7 @@ async getAllProductos(
       } else {
         subId = Number(rawSubId);
       }
-      
+
       updateData.subcategoriaId = subId === null ? null : (subId > 0 ? subId : null);
       this.logger.log(`[updateProducto] 🔥 Forzando update con subcategoriaId=${JSON.stringify(updateData.subcategoriaId)}`);
     }
@@ -495,7 +495,7 @@ async getAllProductos(
       } else {
         catId = Number(rawCatId);
       }
-      
+
       updateData.categoriaId = catId === null ? null : (catId > 0 ? catId : null);
       this.logger.log(`[updateProducto] 🔥 Forzando update con categoriaId=${JSON.stringify(updateData.categoriaId)}`);
     }
@@ -516,7 +516,7 @@ async getAllProductos(
       .select(['p.id', 'p.subcategoriaId', 'p.categoriaId'])
       .where('p.id = :id', { id })
       .getOne();
-    
+
     this.logger.log(`[updateProducto] 🔍 Verificación BD - subcategoriaId=${verificacion?.subcategoriaId}, categoriaId=${verificacion?.categoriaId}`);
 
     // Actualizar inventario si aplica

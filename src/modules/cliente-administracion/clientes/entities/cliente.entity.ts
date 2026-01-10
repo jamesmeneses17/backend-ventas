@@ -3,8 +3,9 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { TipoDocumento } from '../../tipos-documento/entities/tipos-documento.entity';
 import { TipoContactoCliente } from '../../tipo-contacto-cliente/entities/tipo-contacto-cliente.entity';
-import { Venta } from 'src/modules/gestion_producto/ventas/entities/venta.entity';
 import { Compra } from 'src/modules/gestion_producto/compras/entities/compra.entity';
+import { Venta } from 'src/modules/gestion_producto/ventas/entities/venta.entity';
+import { TipoPersona } from '../../tipo-persona/entities/tipo-persona.entity';
 
 @Entity('clientes')
 export class Cliente {
@@ -30,7 +31,7 @@ export class Cliente {
   @JoinColumn({ name: 'tipo_documento_id' })
   tipoDocumento: TipoDocumento;
 
-  @Column({ name: 'numero_documento', length: 30, unique: true })
+  @Column({ name: 'numero_documento', length: 30, unique: false })
   numero_documento: string;
 
   @Column({ length: 200, nullable: true })
@@ -49,5 +50,17 @@ export class Cliente {
   // Relación con Compras (Un cliente/proveedor tiene muchas compras)
   @OneToMany(() => Compra, (compra) => compra.cliente)
   compras: Compra[];
+
+  // Relación con Ventas (Un cliente tiene muchas ventas registradas)
+  // Apunta a la nueva entidad 'Venta' (Cabecera)
+  @OneToMany(() => Venta, (venta) => venta.cliente)
+  ventas: Venta[];
+
+  @Column({ name: 'tipo_persona_id', nullable: true })
+  tipo_persona_id: number;
+
+  @ManyToOne(() => TipoPersona, (tipo) => tipo.clientes)
+  @JoinColumn({ name: 'tipo_persona_id' })
+  tipoPersona: TipoPersona;
 
 }

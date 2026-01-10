@@ -1,41 +1,50 @@
-// src/ventas/dto/create-venta.dto.ts
-
 import {
   IsInt,
   IsDateString,
   IsNumber,
   IsNotEmpty,
   Min,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger'; // <-- Importar o decorador
+import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 
-export class CreateVentaDto {
-  @ApiProperty({ description: 'Data da venda no formato YYYY-MM-DD' })
-  @IsNotEmpty()
-  @IsDateString()
-  fecha: string;
-
-  @ApiProperty({ description: 'ID do produto vendido', minimum: 1 })
+class CreateVentaDetalleDto {
+  @ApiProperty()
   @IsNotEmpty()
   @IsInt()
-  @Min(1)
   productoId: number;
 
-  @ApiProperty({ description: 'Quantidade vendida', minimum: 1 })
+  @ApiProperty()
   @IsNotEmpty()
   @IsInt()
   @Min(1)
   cantidad: number;
 
-  @ApiProperty({ description: 'Custo unitário da mercadoria', minimum: 0 })
-  @IsNotEmpty()
-  @IsNumber()
-  @Min(0)
-  costo_unitario: number;
 
-  @ApiProperty({ description: 'Preço unitário de venda', minimum: 0.01 })
+
+  @ApiProperty()
   @IsNotEmpty()
   @IsNumber()
   @Min(0.01)
   precio_venta: number;
+}
+
+export class CreateVentaDto {
+  @ApiProperty({ description: 'Fecha de la venta YYYY-MM-DD' })
+  @IsNotEmpty()
+  @IsDateString()
+  fecha: string;
+
+  @ApiProperty({ description: 'ID del Cliente/Comprador' })
+  @IsNotEmpty()
+  @IsInt()
+  clienteId: number;
+
+  @ApiProperty({ type: [CreateVentaDetalleDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateVentaDetalleDto)
+  items: CreateVentaDetalleDto[];
 }
