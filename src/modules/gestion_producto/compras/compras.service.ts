@@ -49,6 +49,7 @@ export class ComprasService {
       });
       const compraGuardada = await queryRunner.manager.save(nuevaCompra);
 
+      const nombresProductos: string[] = [];
       // 3. Procesar cada item del detalle
       for (const item of dto.items) {
         const subtotal = Number(item.cantidad) * Number(item.costo_unitario);
@@ -70,6 +71,7 @@ export class ComprasService {
         });
 
         if (!producto) throw new NotFoundException(`Producto ID ${item.producto_id} no encontrado`);
+        nombresProductos.push(`${producto.codigo} - ${producto.nombre} (Cant: ${item.cantidad})`);
 
         // Actualizar Stock y Contador de Compras
         const stockActual = producto.inventario?.stock ?? 0;
@@ -95,7 +97,7 @@ export class ComprasService {
         tipo_movimiento_id: 5,
         fecha: nuevaCompra.fecha,
         monto: totalGeneral,
-        concepto: `Compra Ref: ${compraGuardada.id} - Proveedor ID: ${dto.cliente_id} - Items: ${dto.items.length}`,
+        concepto: `Compra ID: ${compraGuardada.id} - Productos: ${nombresProductos.join(', ')}`,
       });
 
       await queryRunner.commitTransaction();
@@ -166,6 +168,7 @@ export class ComprasService {
       // Asumiremos que el frontend siempre manda el carrito completo.
       let nuevoTotal = 0;
       let nuevosItemsCount = 0;
+      const nombresProductos: string[] = [];
 
       if (dto.items && dto.items.length > 0) {
         nuevoTotal = dto.items.reduce((acc, item) => acc + (Number(item.cantidad) * Number(item.costo_unitario)), 0);
@@ -189,16 +192,16 @@ export class ComprasService {
           if (producto) {
             const stockActual = producto.inventario?.stock ?? 0;
             const comprasActual = producto.inventario?.compras ?? 0;
+
             await queryRunner.manager.update(Inventario, { productoId: producto.id }, {
               stock: stockActual + item.cantidad,
               compras: comprasActual + item.cantidad
             });
+            nombresProductos.push(`${producto.codigo} - ${producto.nombre} (Cant: ${item.cantidad})`);
 
-            // Recalcular Precio Costo (Simplificado: Promedio con historial, RECALCULO DE COSTO COMPLEJO OMITIDO POR SIMPLICIDAD, SE MANTIENE UPDATE SIMPLE)
-            // Nota: Para ser exactos, deberíamos haber eliminado el impacto del costo anterior, pero eso requiere historial completo.
-            // Actualizamos con el nuevo dato entrante.
+            // Recalcular Precio Costo
             await queryRunner.manager.update(Producto, producto.id, {
-              precio_costo: item.costo_unitario // Actualizamos precios costo al último o promedio si se desea
+              precio_costo: item.costo_unitario
             });
           }
         }
@@ -216,10 +219,6 @@ export class ComprasService {
       });
 
       // 5. Actualizar Movimiento de Caja asociado
-      // Buscamos movimiento por concepto (esto es frágil, idealmente guardar caja_id en compra, pero usaremos fecha y monto aprox o patrón string)
-      // O buscamos el último movimiento de tipo 5 que coincida en fecha y monto (aproximación)
-      // MEJOR: Actualizar cajaService para soportar update o buscar por referencia si estuviera.
-      // Como no tenemos Link ID, intentaremos buscar por la referencia en el concepto.
       const movimiento = await this.cajaRepo.createQueryBuilder('caja')
         .where("concepto LIKE :ref", { ref: `%Compra Ref: ${id}%` })
         .andWhere("tipo_movimiento_id = 5")
@@ -229,7 +228,7 @@ export class ComprasService {
         await queryRunner.manager.update(MovimientoCaja, movimiento.id, {
           monto: nuevoTotal,
           fecha: fechaFinal,
-          concepto: `Compra Ref: ${id} - Proveedor ID: ${dto.cliente_id ?? compraActual.clienteId} - Items: ${nuevosItemsCount}`
+          concepto: `Compra ID: ${id} - Productos: ${nombresProductos.length > 0 ? nombresProductos.join(', ') : ''}`
         });
       }
 
