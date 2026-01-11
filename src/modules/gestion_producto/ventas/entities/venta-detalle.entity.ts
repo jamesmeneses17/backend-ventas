@@ -32,7 +32,7 @@ export class VentaDetalle {
 
 
 
-    @Column({ type: 'decimal', precision: 12, scale: 2 })
+    @Column({ name: 'precio_unitario', type: 'decimal', precision: 12, scale: 2 })
     precio_venta: number;
 
     @Column({ type: 'decimal', precision: 12, scale: 2 })

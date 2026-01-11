@@ -84,7 +84,10 @@ export class VentasService {
   }
 
   findAll(): Promise<Venta[]> {
-    return this.ventaRepository.find({ relations: ['cliente', 'detalles'] });
+    return this.ventaRepository.find({
+      relations: ['cliente', 'detalles', 'detalles.producto'],
+      order: { id: 'DESC' }
+    });
   }
 
   async findOne(id: number): Promise<Venta> {
