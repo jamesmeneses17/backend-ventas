@@ -12,7 +12,7 @@ export class PedidosOnlineService {
     private readonly pedidoRepo: Repository<PedidoOnline>,
     @InjectRepository(DetallePedidoOnline)
     private readonly detalleRepo: Repository<DetallePedidoOnline>,
-  ) {}
+  ) { }
 
   async crearPedido(dto: CreatePedidoOnlineDto) {
     try {
@@ -48,7 +48,7 @@ export class PedidosOnlineService {
 
   async listarPedidos() {
     return await this.pedidoRepo.find({
-      relations: ['detalles'],
+      relations: ['detalles', 'detalles.producto'],
       order: { fecha: 'DESC' },
     });
   }
@@ -60,7 +60,7 @@ export class PedidosOnlineService {
   async actualizarEstado(id: number, estado: string) {
     try {
       const pedido = await this.pedidoRepo.findOne({ where: { id } });
-      
+
       if (!pedido) {
         throw new NotFoundException(`El pedido con ID ${id} no existe`);
       }
@@ -69,10 +69,10 @@ export class PedidosOnlineService {
       pedido.estado = estado as any;
       await this.pedidoRepo.save(pedido);
 
-      return { 
+      return {
         mensaje: `Estado del pedido actualizado a ${estado}`,
         id: pedido.id,
-        nuevoEstado: pedido.estado 
+        nuevoEstado: pedido.estado
       };
     } catch (error) {
       if (error instanceof NotFoundException) throw error;

@@ -10,6 +10,10 @@ export class DetallePedidoOnline {
   @JoinColumn({ name: 'pedido_id' })
   pedido: PedidoOnline;
 
+  @ManyToOne('Producto', { eager: false })
+  @JoinColumn({ name: 'producto_id' })
+  producto: any;
+
   @Column()
   producto_id: number;
 
