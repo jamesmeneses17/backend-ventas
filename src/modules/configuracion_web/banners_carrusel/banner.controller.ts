@@ -92,7 +92,7 @@ export class BannerController {
    * RUTA DELETE: /api/configuracion/banners/imagenes/:bannerId
    * Elimina la imagen del banner en el storage y limpia el campo imagenDesktopUrl
    */
-  @Delete('imagenes/:bannerId')
+  @Delete('imagenes/banner/:bannerId')
   async deleteImagen(@Param('bannerId', ParseIntPipe) bannerId: number): Promise<{ success: boolean }> {
     return this.bannerService.deleteImagen(bannerId);
   }
