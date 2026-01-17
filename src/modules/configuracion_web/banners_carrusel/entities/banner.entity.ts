@@ -14,6 +14,9 @@ export class Banner {
     @Column({ type: 'varchar', length: 255, nullable: true })
     nombre?: string;
 
+    @Column({ type: 'boolean', default: true })
+    activo: boolean;
+
     @OneToMany(() => BannerImagen, (bannerImagen: BannerImagen) => bannerImagen.banner, { cascade: true })
     imagenes: BannerImagen[];
 }

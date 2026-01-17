@@ -1,8 +1,8 @@
 // src/modules/configuracion_web/banners/banner.controller.ts
 
-import { 
-  Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe, 
-  UsePipes, ValidationPipe, HttpCode, HttpStatus, UploadedFile, UseInterceptors, BadRequestException, NotFoundException 
+import {
+  Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe,
+  UsePipes, ValidationPipe, HttpCode, HttpStatus, UploadedFile, UseInterceptors, BadRequestException, NotFoundException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -19,7 +19,7 @@ export class BannerController {
   constructor(
     private readonly bannerService: BannerService,
     private readonly r2: R2Service,
-  ) {}
+  ) { }
 
   /**
    * RUTA GET: /api/configuracion/banners
@@ -107,5 +107,16 @@ export class BannerController {
   @Delete('imagenes/:imagenId')
   async eliminarImagenBanner(@Param('imagenId', ParseIntPipe) imagenId: number) {
     return this.bannerService.removeImagen(imagenId);
+  }
+
+  /**
+   * Actualiza el estado de una imagen (activo/inactivo)
+   */
+  @Put('imagenes/:imagenId')
+  async updateImagenStatus(
+    @Param('imagenId', ParseIntPipe) imagenId: number,
+    @Body() body: { activo: boolean }
+  ) {
+    return this.bannerService.updateImagen(imagenId, body);
   }
 }

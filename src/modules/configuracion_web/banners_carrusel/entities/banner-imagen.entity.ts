@@ -18,4 +18,7 @@ export class BannerImagen {
 
     @Column({ type: 'int', default: 0 })
     orden: number;
+
+    @Column({ type: 'boolean', default: true })
+    activo: boolean;
 }

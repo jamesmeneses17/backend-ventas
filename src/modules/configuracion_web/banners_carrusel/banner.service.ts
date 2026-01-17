@@ -19,7 +19,7 @@ export class BannerService {
     @InjectRepository(BannerImagen)
     private readonly bannerImagenRepository: Repository<BannerImagen>,
     private readonly r2Service: R2Service,
-  ) {}
+  ) { }
 
   /**
    * Obtiene todos los banners, ordenados por el campo 'orden'.
@@ -100,10 +100,20 @@ export class BannerService {
     const imagen = await this.bannerImagenRepository.findOne({ where: { id: imagenId }, relations: ['banner'] });
     if (!imagen) throw new NotFoundException('Imagen no encontrada');
     // Extraer el key del url para borrar en R2
-      const key = imagen.urlImagen.split('/').pop() || '';
-      await this.r2Service.deleteFile(String(key));
+    const key = imagen.urlImagen.split('/').pop() || '';
+    await this.r2Service.deleteFile(String(key));
     await this.bannerImagenRepository.delete(imagenId);
     return { success: true };
+  }
+
+  /**
+   * Actualiza el estado de una imagen
+   */
+  async updateImagen(imagenId: number, data: Partial<BannerImagen>): Promise<BannerImagen> {
+    const imagen = await this.bannerImagenRepository.findOne({ where: { id: imagenId } });
+    if (!imagen) throw new NotFoundException('Imagen no encontrada');
+    Object.assign(imagen, data);
+    return this.bannerImagenRepository.save(imagen);
   }
 
   /**
