@@ -142,15 +142,20 @@ export class CajaService {
 
     async getResumenDiario(anio: number, mes: number) {
         // Agrupar por día
-        const result = await this.repository.createQueryBuilder('caja')
+        const query = this.repository.createQueryBuilder('caja')
             .select("caja.fecha", "fecha") // Fecha completa
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4) THEN caja.monto ELSE 0 END)", "ingreso")
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (2, 5) THEN caja.monto ELSE 0 END)", "egreso")
             .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 3 THEN caja.monto ELSE 0 END)", "gasto")
-            .where("YEAR(caja.fecha) = :anio AND MONTH(caja.fecha) = :mes", { anio, mes })
+            .where("YEAR(caja.fecha) = :anio", { anio })
             .groupBy("caja.fecha")
-            .orderBy("caja.fecha", "ASC")
-            .getRawMany();
+            .orderBy("caja.fecha", "ASC");
+
+        if (mes > 0) {
+            query.andWhere("MONTH(caja.fecha) = :mes", { mes });
+        }
+
+        const result = await query.getRawMany();
 
         return result.map(r => {
             const ingreso = Number(r.ingreso);
