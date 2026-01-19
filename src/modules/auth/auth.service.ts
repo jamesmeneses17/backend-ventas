@@ -61,16 +61,27 @@ export class AuthService {
 
     async login(loginDto: LoginDto) {
         const user = await this.validateUser(loginDto.correo, loginDto.contrasena);
-        const payload = { 
-            sub: user.id, 
-            correo: user.correo, 
-            nombre: user.nombre, 
-            rol: user.rol 
+
+        // Actualizar estado de usuario
+        user.en_linea = 1;
+        user.ultimo_login = new Date();
+        await this.usuarioRepo.save(user);
+
+        const payload = {
+            sub: user.id,
+            correo: user.correo,
+            nombre: user.nombre,
+            rol: user.rol
         };
         return {
             access_token: this.jwtService.sign(payload),
             user: { id: user.id, nombre: user.nombre, correo: user.correo, rol: user.rol },
         };
+    }
+
+    async logout(userId: number) {
+        await this.usuarioRepo.update(userId, { en_linea: 0 });
+        return { message: 'Sesión cerrada exitosamente' };
     }
 
     /**
@@ -87,14 +98,14 @@ export class AuthService {
         // No revelar si el usuario existe o no
         if (!user) {
             console.log(` Intento de recuperación para correo no existente: ${correo}`);
-            return { 
-                message: 'Si el correo existe, recibirás un enlace de recuperación' 
+            return {
+                message: 'Si el correo existe, recibirás un enlace de recuperación'
             };
         }
 
         // Generar token único y seguro
         const resetToken = crypto.randomBytes(32).toString('hex');
-        
+
         // Hash del token para guardarlo en BD de forma segura
         const hashedToken = crypto
             .createHash('sha256')
@@ -122,8 +133,8 @@ export class AuthService {
             throw new BadRequestException(`Error al enviar el correo: ${error.message || 'Error desconocido'}`);
         }
 
-        return { 
-            message: 'Si el correo existe, recibirás un enlace de recuperación' 
+        return {
+            message: 'Si el correo existe, recibirás un enlace de recuperación'
         };
     }
 
@@ -156,11 +167,11 @@ export class AuthService {
         // Actualizar contraseña (sin hashear por ahora, según tu lógica actual)
         // TODO: Implementar bcrypt cuando decidas hashear contraseñas
         user.contrasena = nuevaContrasena;
-        
+
         // Limpiar tokens de recuperación
         user.reset_password_token = null as any;
         user.reset_password_expires = null as any;
-        
+
         await this.usuarioRepo.save(user);
 
         console.log(' Contraseña actualizada para:', user.correo);
@@ -173,8 +184,8 @@ export class AuthService {
             // No falla la operación si el email falla
         }
 
-        return { 
-            message: 'Contraseña actualizada exitosamente' 
+        return {
+            message: 'Contraseña actualizada exitosamente'
         };
     }
 }

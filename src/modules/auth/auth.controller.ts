@@ -8,12 +8,18 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  async logout(@Req() req: any) {
+    return this.authService.logout(req.user.id);
+  }
 
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     console.log('🔐 LOGIN - Datos recibidos:', loginDto);
-    
+
     try {
       const result = await this.authService.login(loginDto);
       console.log('✅ LOGIN EXITOSO - Respuesta:', {
@@ -22,7 +28,7 @@ export class AuthController {
         tokenLength: result.access_token?.length,
         user: result.user?.correo
       });
-      
+
       return {
         message: 'Login exitoso',
         ...result
@@ -37,7 +43,7 @@ export class AuthController {
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     console.log('📧 FORGOT PASSWORD - Correo:', forgotPasswordDto.correo);
     console.log('📧 Validando DTO:', forgotPasswordDto);
-    
+
     try {
       const result = await this.authService.forgotPassword(forgotPasswordDto);
       console.log('✅ Proceso de recuperación iniciado');
@@ -52,7 +58,7 @@ export class AuthController {
   @Post('reset-password')
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     console.log('🔑 RESET PASSWORD - Token recibido');
-    
+
     try {
       const result = await this.authService.resetPassword(resetPasswordDto);
       console.log('✅ Contraseña reseteada exitosamente');

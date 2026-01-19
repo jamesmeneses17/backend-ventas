@@ -27,4 +27,10 @@ export class UsuarioAdmin {
 
     @Column({ type: 'datetime', nullable: true })
     reset_password_expires: Date;
+
+    @Column({ type: 'datetime', nullable: true })
+    ultimo_login: Date;
+
+    @Column({ type: 'tinyint', default: 0 })
+    en_linea: number;
 }

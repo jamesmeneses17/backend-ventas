@@ -11,7 +11,7 @@ export class UsuariosAdminService {
   constructor(
     @InjectRepository(UsuarioAdmin)
     private readonly usuarioAdminRepository: Repository<UsuarioAdmin>,
-  ) {}
+  ) { }
 
   async create(createUsuariosAdminDto: CreateUsuariosAdminDto) {
     const nuevoUsuario = this.usuarioAdminRepository.create(createUsuariosAdminDto);
@@ -22,7 +22,7 @@ export class UsuariosAdminService {
     console.log('📋 Obteniendo todos los usuarios admin...');
     try {
       const usuarios = await this.usuarioAdminRepository.find({
-        select: ['id', 'nombre', 'correo', 'rol', 'fecha_creacion']
+        select: ['id', 'nombre', 'correo', 'rol', 'fecha_creacion', 'ultimo_login', 'en_linea']
       });
       console.log(`✅ Encontrados ${usuarios.length} usuarios admin`);
       return usuarios;
@@ -39,12 +39,12 @@ export class UsuariosAdminService {
         where: { id },
         select: ['id', 'nombre', 'correo', 'rol', 'fecha_creacion']
       });
-      
+
       if (!usuario) {
         console.log(`❌ Usuario admin con ID ${id} no encontrado`);
         return null;
       }
-      
+
       console.log(`✅ Usuario admin encontrado: ${usuario.nombre}`);
       return usuario;
     } catch (error) {
@@ -82,6 +82,14 @@ export class UsuariosAdminService {
     return await this.usuarioAdminRepository.findOne({
       where: { id },
       select: ['id', 'nombre', 'correo', 'rol'], // 👈 solo los campos públicos
+    });
+  }
+
+  async setOnlineStatus(userId: number, status: number) {
+    console.log(`🔌 Actualizando estado online usuario ${userId} a: ${status}`);
+    await this.usuarioAdminRepository.update(userId, {
+      en_linea: status,
+      ultimo_login: status === 1 ? new Date() : undefined // Actualizar fecha solo al conectar
     });
   }
 }
