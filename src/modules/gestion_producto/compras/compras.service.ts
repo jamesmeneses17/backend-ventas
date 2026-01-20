@@ -65,7 +65,8 @@ export class ComprasService {
         await queryRunner.manager.save(detalle);
 
         // 4. Actualizar Inventario y Precio de Costo
-        const producto = await this.productoRepo.findOne({
+        // 4. Actualizar Inventario y Precio de Costo
+        const producto = await queryRunner.manager.findOne(Producto, {
           where: { id: item.producto_id },
           relations: ['inventario'],
         });
@@ -82,14 +83,8 @@ export class ComprasService {
           compras: comprasActual + item.cantidad,
         });
 
-        // Actualizar precio_costo en el producto (Promedio Simple)
-        const historialCompras = await this.detalleRepo.find({ where: { producto_id: producto.id } });
-        const sumaCostos = historialCompras.reduce((sum, det) => sum + Number(det.costo_unitario), Number(item.costo_unitario));
-        const nuevoPrecioCosto = sumaCostos / (historialCompras.length + 1);
-
-        await queryRunner.manager.update(Producto, producto.id, {
-          precio_costo: nuevoPrecioCosto,
-        });
+        // Actualizar precio_costo en el producto (Promedio Global)
+        await this.recalculateCostPrice(queryRunner, producto.id);
       }
 
       // 5. Registrar Egreso en Caja (ID 5 = Egreso por Compra)
@@ -188,7 +183,8 @@ export class ComprasService {
           await queryRunner.manager.save(nuevoDetalle);
 
           // Actualizar Inventario (Sumar nueva cantidad)
-          const producto = await this.productoRepo.findOne({ where: { id: item.producto_id }, relations: ['inventario'] });
+          // IMPORTANTE: Usar queryRunner.manager para ver los cambios previos (la resta) dentro de la transacción
+          const producto = await queryRunner.manager.findOne(Producto, { where: { id: item.producto_id }, relations: ['inventario'] });
           if (producto) {
             const stockActual = producto.inventario?.stock ?? 0;
             const comprasActual = producto.inventario?.compras ?? 0;
@@ -199,10 +195,8 @@ export class ComprasService {
             });
             nombresProductos.push(`${producto.codigo} - ${producto.nombre} (Cant: ${item.cantidad})`);
 
-            // Recalcular Precio Costo
-            await queryRunner.manager.update(Producto, producto.id, {
-              precio_costo: item.costo_unitario
-            });
+            // Recalcular Precio Costo (Promedio Global)
+            await this.recalculateCostPrice(queryRunner, producto.id);
           }
         }
       } else {
@@ -253,9 +247,12 @@ export class ComprasService {
     try {
       const compra = await this.findOne(id);
 
+      const productosAfectados = new Set<number>();
+
       // 1. Revertir Inventario
       if (compra.detalles) {
         for (const detalle of compra.detalles) {
+          productosAfectados.add(detalle.producto_id); // Guardar ID para recalcular costo después
           const producto = detalle.producto;
           // Necesitamos cargar inventario si no vino en el findOne (findOne trae producto pero a veces no inventario deep)
           // Hacemos un fetch rápido si es necesario, o confiamos en que TypeORM cargue si está en relations.
@@ -284,6 +281,11 @@ export class ComprasService {
       // 3. Eliminar Compra (Cascade borrará detalles)
       await queryRunner.manager.remove(compra);
 
+      // 4. Recalcular Precio Costo de los productos afectados
+      for (const prodId of productosAfectados) {
+        await this.recalculateCostPrice(queryRunner, prodId);
+      }
+
       await queryRunner.commitTransaction();
       return { message: `Compra #${id} eliminada correctamente` };
 
@@ -293,5 +295,21 @@ export class ComprasService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  // ===== MÉTODO PRIVADO PARA RECALCULAR PRECIO COSTO (PROMEDIO) =====
+  private async recalculateCostPrice(queryRunner: any, productoId: number) {
+    // Usar QueryBuilder para calcular el promedio directamente en BD
+    const result = await queryRunner.manager
+      .createQueryBuilder(CompraDetalle, 'detalle')
+      .select('AVG(detalle.costo_unitario)', 'promedio')
+      .where('detalle.producto_id = :id', { id: productoId })
+      .getRawOne();
+
+    const nuevoCosto = Number(result?.promedio || 0);
+
+    await queryRunner.manager.update(Producto, productoId, {
+      precio_costo: nuevoCosto,
+    });
   }
 }

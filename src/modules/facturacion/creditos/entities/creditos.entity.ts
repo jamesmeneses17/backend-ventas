@@ -1,8 +1,9 @@
 // src/creditos/entities/creditos.entity.ts
 
-import { Column, Entity, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { DetalleCredito } from './detalle-credito.entity';
 import { PagoCredito } from '../../pagos-creditos/entities/pago-credito.entity';
+import { Cliente } from '../../../cliente-administracion/clientes/entities/cliente.entity';
 
 @Entity('creditos')
 export class Credito {
@@ -32,5 +33,9 @@ export class Credito {
 
   @OneToMany(() => PagoCredito, (pago) => pago.credito)
   pagos: PagoCredito[];
+
+  @ManyToOne(() => Cliente)
+  @JoinColumn({ name: 'cliente_id' })
+  cliente: Cliente;
 }
 

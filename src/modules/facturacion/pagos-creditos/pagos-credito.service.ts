@@ -17,7 +17,7 @@ export class PagosCreditoService {
 
     @InjectRepository(Credito)
     private readonly creditosRepository: Repository<Credito>,
-  ) {}
+  ) { }
 
   /**
    * CREATE: Registra un nuevo abono
@@ -46,7 +46,9 @@ export class PagosCreditoService {
     const nuevoPago = this.pagosRepository.create({
       credito_id,
       monto_pago,
-      fecha_pago: new Date(),
+      fecha_pago: createPagoDto.fecha_pago ? new Date(createPagoDto.fecha_pago) : new Date(),
+      notas: createPagoDto.notas,
+      estado: 'ACTIVO',
     });
     await this.pagosRepository.save(nuevoPago);
 
@@ -58,6 +60,8 @@ export class PagosCreditoService {
     // 5. Estado
     if (nuevoSaldo <= 0) {
       credito.estado = 'PAGADO';
+    } else {
+      credito.estado = 'PENDIENTE'; // Re-asegurar pendiente si hay saldo
     }
 
     const creditoActualizado =
@@ -69,6 +73,37 @@ export class PagosCreditoService {
       nuevo_saldo: Number(creditoActualizado.saldo_pendiente),
       estado: creditoActualizado.estado,
     };
+  }
+
+  async anularAbono(id: number) {
+    // 1. Buscar el pago
+    const pago = await this.pagosRepository.findOneBy({ id });
+    if (!pago) throw new NotFoundException('Pago no encontrado');
+
+    if (pago.estado === 'ANULADO') {
+      throw new BadRequestException('El pago ya está anulado');
+    }
+
+    // 2. Buscar crédito asociado
+    const credito = await this.creditosRepository.findOneBy({ id: pago.credito_id });
+    if (!credito) throw new NotFoundException('Crédito asociado no encontrado');
+
+    // 3. Lógica de reversión
+    pago.estado = 'ANULADO';
+    await this.pagosRepository.save(pago);
+
+    // Retornar saldo al crédito
+    credito.saldo_pendiente = Number(credito.saldo_pendiente) + Number(pago.monto_pago);
+
+    // Si el crédito estaba PAGADO, ahora vuelve a estar PENDIENTE (si saldo > 0)
+    // Aunque técnicamente si se anula el pago total, vuelve a PENDIENTE
+    if (credito.saldo_pendiente > 0) {
+      credito.estado = 'PENDIENTE';
+    }
+
+    await this.creditosRepository.save(credito);
+
+    return { success: true, message: 'Pago anulado y saldo restaurado' };
   }
 
   async buscarPagosPorCredito(creditoId: number) {

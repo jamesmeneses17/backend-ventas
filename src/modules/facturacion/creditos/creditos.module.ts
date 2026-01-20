@@ -6,10 +6,15 @@ import { DetalleCredito } from './entities/detalle-credito.entity';
 import { CreditosService } from './creditos.service';
 import { CreditosController } from './creditos.controller';
 
+import { InventarioModule } from '../../gestion_producto/inventario/inventario.module';
+
 @Module({
-  imports: [TypeOrmModule.forFeature([Credito, DetalleCredito])],
+  imports: [
+    TypeOrmModule.forFeature([Credito, DetalleCredito]),
+    InventarioModule,
+  ],
   controllers: [CreditosController],
   providers: [CreditosService],
   exports: [CreditosService],
 })
-export class CreditosModule {}
+export class CreditosModule { }

@@ -8,7 +8,7 @@ export class InventarioService {
   constructor(
     @InjectRepository(Inventario)
     private readonly repo: Repository<Inventario>,
-  ) {}
+  ) { }
 
   // ================= MÉTODOS CRUD PARA EL CONTROLLER =================
   async create(dto: Partial<Inventario>): Promise<Inventario> {
@@ -38,6 +38,10 @@ export class InventarioService {
   async remove(id: number): Promise<void> {
     const inventario = await this.findOne(id);
     await this.repo.remove(inventario);
+  }
+
+  async findOneByProductoId(productoId: number): Promise<Inventario | null> {
+    return this.repo.findOne({ where: { productoId }, relations: ['producto'] });
   }
 
   // =========================================================================
