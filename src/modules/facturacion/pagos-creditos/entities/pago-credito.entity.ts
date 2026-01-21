@@ -19,9 +19,7 @@ export class PagoCredito {
   @CreateDateColumn({ name: 'fecha_pago' })
   fecha_pago: Date;
 
-  @Column({ name: 'notas', type: 'text', nullable: true })
-  notas: string;
 
-  @Column({ name: 'estado', default: 'ACTIVO', length: 20 })
-  estado: string;
+
+
 }
