@@ -75,25 +75,39 @@ export class ComprasService {
         nombresProductos.push(`${producto.codigo} - ${producto.nombre} (Cant: ${item.cantidad})`);
 
         // Actualizar Stock y Contador de Compras
-        const stockActual = producto.inventario?.stock ?? 0;
-        const comprasActual = producto.inventario?.compras ?? 0;
-
-        await queryRunner.manager.update(Inventario, { productoId: producto.id }, {
-          stock: stockActual + item.cantidad,
-          compras: comprasActual + item.cantidad,
-        });
+        if (producto.inventario) {
+          const stockActual = producto.inventario.stock;
+          const comprasActual = producto.inventario.compras;
+          await queryRunner.manager.update(Inventario, { productoId: producto.id }, {
+            stock: stockActual + item.cantidad,
+            compras: comprasActual + item.cantidad,
+          });
+        } else {
+          // Si no existe inventario, crearlo
+          const nuevoInventario = queryRunner.manager.create(Inventario, {
+            productoId: producto.id,
+            stock: item.cantidad,
+            compras: item.cantidad,
+            ventas: 0
+          });
+          await queryRunner.manager.save(nuevoInventario);
+        }
 
         // Actualizar precio_costo en el producto (Promedio Global)
         await this.recalculateCostPrice(queryRunner, producto.id);
       }
 
       // 5. Registrar Egreso en Caja (ID 5 = Egreso por Compra)
-      await this.cajaService.create({
-        tipo_movimiento_id: 5,
+      // 5. Registrar Egreso en Caja (ID 5 = Egreso por Compra) DIRECTAMENTE con queryRunner para evitar DEADLOCKS
+      // No usar this.cajaService.create porque usa otra conexión/transacción y no ve la Compra aún (fk error o lock wait)
+      const cajaMov = queryRunner.manager.create(MovimientoCaja, {
+        tipoMovimientoId: 5,
         fecha: nuevaCompra.fecha,
         monto: totalGeneral,
-        concepto: `Compra ID: ${compraGuardada.id} - Productos: ${nombresProductos.join(', ')}`,
+        concepto: `Compra ID: ${compraGuardada.id}`,
+        compraId: compraGuardada.id, // Relación directa
       });
+      await queryRunner.manager.save(cajaMov);
 
       await queryRunner.commitTransaction();
       return this.findOne(compraGuardada.id);
@@ -186,13 +200,24 @@ export class ComprasService {
           // IMPORTANTE: Usar queryRunner.manager para ver los cambios previos (la resta) dentro de la transacción
           const producto = await queryRunner.manager.findOne(Producto, { where: { id: item.producto_id }, relations: ['inventario'] });
           if (producto) {
-            const stockActual = producto.inventario?.stock ?? 0;
-            const comprasActual = producto.inventario?.compras ?? 0;
-
-            await queryRunner.manager.update(Inventario, { productoId: producto.id }, {
-              stock: stockActual + item.cantidad,
-              compras: comprasActual + item.cantidad
-            });
+            // Actualizar Inventario y Contador de Compras
+            if (producto.inventario) {
+              const stockActual = producto.inventario.stock;
+              const comprasActual = producto.inventario.compras;
+              await queryRunner.manager.update(Inventario, { productoId: producto.id }, {
+                stock: stockActual + item.cantidad,
+                compras: comprasActual + item.cantidad,
+              });
+            } else {
+              // Si no existe inventario (auto-heal), crearlo
+              const nuevoInventario = queryRunner.manager.create(Inventario, {
+                productoId: producto.id,
+                stock: item.cantidad,
+                compras: item.cantidad,
+                ventas: 0
+              });
+              await queryRunner.manager.save(nuevoInventario);
+            }
             nombresProductos.push(`${producto.codigo} - ${producto.nombre} (Cant: ${item.cantidad})`);
 
             // Recalcular Precio Costo (Promedio Global)
@@ -213,16 +238,14 @@ export class ComprasService {
       });
 
       // 5. Actualizar Movimiento de Caja asociado
-      const movimiento = await this.cajaRepo.createQueryBuilder('caja')
-        .where("concepto LIKE :ref", { ref: `%Compra Ref: ${id}%` })
-        .andWhere("tipo_movimiento_id = 5")
-        .getOne();
+      // Usamos queryRunner para buscar por compraId (más seguro que concepto)
+      const movimiento = await queryRunner.manager.findOne(MovimientoCaja, { where: { compraId: id } });
 
       if (movimiento) {
         await queryRunner.manager.update(MovimientoCaja, movimiento.id, {
           monto: nuevoTotal,
           fecha: fechaFinal,
-          concepto: `Compra ID: ${id} - Productos: ${nombresProductos.length > 0 ? nombresProductos.join(', ') : ''}`
+          concepto: `Compra ID: ${id}`
         });
       }
 

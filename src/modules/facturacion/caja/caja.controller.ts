@@ -42,6 +42,11 @@ export class CajaController {
         return this.cajaService.findOne(+id);
     }
 
+    @Get(':id/detalles')
+    getDetalle(@Param('id') id: string) {
+        return this.cajaService.getDetalle(+id);
+    }
+
     @Patch(':id')
     update(@Param('id') id: string, @Body() updateMovimientoDto: UpdateMovimientoCajaDto) {
         return this.cajaService.update(+id, updateMovimientoDto);

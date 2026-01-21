@@ -67,13 +67,15 @@ export class VentasService {
         await queryRunner.manager.save(inv);
       }
 
-      // 3. Registrar Ingreso en Caja (ID 4 = Venta)
-      await this.cajaService.create({
-        tipo_movimiento_id: 4,
+      // 3. Registrar Ingreso en Caja (ID 4 = Venta) - Transaccional
+      const cajaMov = queryRunner.manager.create(MovimientoCaja, {
+        tipoMovimientoId: 4,
         fecha: dto.fecha,
         monto: totalVenta,
-        concepto: `Venta Factura #${cabeceraGuardada.id} - Items: ${dto.items.length}`,
+        concepto: `Venta Factura #${cabeceraGuardada.id}`,
+        ventaId: cabeceraGuardada.id,
       });
+      await queryRunner.manager.save(cajaMov);
 
       await queryRunner.commitTransaction();
       return this.findOne(cabeceraGuardada.id);
@@ -174,11 +176,9 @@ export class VentasService {
       });
 
       // 4. Actualizar Caja (Sincronizar movimiento financiero)
-      const movimientoCaja = await this.cajaRepository
-        .createQueryBuilder('caja')
-        .where("concepto LIKE :ref", { ref: `%Venta Factura #${id}%` }) // Busca por referencia
-        .andWhere("tipo_movimiento_id = 4")
-        .getOne();
+      // 4. Actualizar Caja (Sincronizar movimiento financiero)
+      // Buscar por ventaId usando queryRunner
+      const movimientoCaja = await queryRunner.manager.findOne(MovimientoCaja, { where: { ventaId: id } });
 
       if (movimientoCaja) {
         await queryRunner.manager.update(MovimientoCaja, movimientoCaja.id, {

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString, IsDateString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, IsDateString, IsOptional } from 'class-validator';
 
 export class CreateMovimientoCajaDto {
     @IsNumber()
@@ -16,4 +16,12 @@ export class CreateMovimientoCajaDto {
     @IsString()
     @IsNotEmpty()
     concepto: string;
+
+    @IsNumber()
+    @IsOptional()
+    venta_id?: number;
+
+    @IsNumber()
+    @IsOptional()
+    compra_id?: number;
 }

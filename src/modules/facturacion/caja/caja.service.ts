@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MovimientoCaja } from './entities/movimiento-caja.entity';
@@ -18,6 +18,8 @@ export class CajaService {
         const data = {
             ...dto,
             tipoMovimientoId: dto.tipo_movimiento_id,
+            ventaId: dto.venta_id,
+            compraId: dto.compra_id,
         };
         const nuevo = this.repository.create(data);
         return this.repository.save(nuevo);
@@ -59,6 +61,11 @@ export class CajaService {
 
     async remove(id: number) {
         const registro = await this.findOne(id);
+
+        if (registro.ventaId || registro.compraId) {
+            throw new BadRequestException('Error: No se puede eliminar por aquí. Debe anular la Compra o Venta original.');
+        }
+
         return this.repository.remove(registro);
     }
 
@@ -202,5 +209,35 @@ export class CajaService {
         } else {
             console.warn("No se encontró movimiento de caja para eliminar con criterios:", JSON.stringify(criteria));
         }
+    }
+
+    async getDetalle(id: number) {
+        const movimiento = await this.repository.findOne({
+            where: { id },
+            relations: [
+                'venta', 'venta.detalles', 'venta.detalles.producto',
+                'compra', 'compra.detalles', 'compra.detalles.producto'
+            ]
+        });
+
+        if (!movimiento) throw new NotFoundException('Movimiento no encontrado');
+
+        if (movimiento.venta) {
+            return movimiento.venta.detalles.map(d => ({
+                codigo: d.producto.codigo,
+                nombre: d.producto.nombre,
+                cantidad: d.cantidad
+            }));
+        }
+
+        if (movimiento.compra) {
+            return movimiento.compra.detalles.map(d => ({
+                codigo: d.producto.codigo,
+                nombre: d.producto.nombre,
+                cantidad: d.cantidad
+            }));
+        }
+
+        return [];
     }
 }
