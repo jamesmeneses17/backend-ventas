@@ -10,8 +10,13 @@ import {
 import { Type } from 'class-transformer';
 
 export class CreateDetalleCreditoDto {
+  @IsOptional()
   @IsInt()
-  producto_id: number;
+  producto_id?: number;
+
+  @IsOptional()
+  @IsString()
+  descripcion_manual?: string;
 
   @IsInt()
   cantidad: number;

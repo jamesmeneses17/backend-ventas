@@ -5,7 +5,6 @@ import { Credito } from './entities/creditos.entity';
 import { DetalleCredito } from './entities/detalle-credito.entity';
 import {
   CreateCreditoDto,
-  CreateDetalleCreditoDto,
 } from './dtos/create-credito.dto';
 import { UpdateCreditoDto } from './dtos/update-credito.dto';
 
@@ -29,6 +28,7 @@ export class CreditosService {
     // VALIDACIÓN PREVIA DE STOCK
     if (detalles && Array.isArray(detalles)) {
       for (const det of detalles) {
+        if (!det.producto_id) continue;
         const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
         const stockActual = Number(inventario?.stock || 0);
 
@@ -53,6 +53,7 @@ export class CreditosService {
 
       // DISMINUIR STOCK
       for (const det of detalles) {
+        if (!det.producto_id) continue;
         const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
         if (inventario) {
           await this.inventarioService.actualizarInventarioPorProductoId(
@@ -102,12 +103,15 @@ export class CreditosService {
       const devolucionPorProducto: Record<number, number> = {};
       if (credito.detalles) {
         for (const det of credito.detalles) {
-          devolucionPorProducto[det.producto_id] = (devolucionPorProducto[det.producto_id] || 0) + Number(det.cantidad);
+          if (det.producto_id) {
+            devolucionPorProducto[det.producto_id] = (devolucionPorProducto[det.producto_id] || 0) + Number(det.cantidad);
+          }
         }
       }
 
       // Verificar si el stock actual + lo liberado alcanza para lo nuevo
       for (const det of dto.detalles) {
+        if (!det.producto_id) continue;
         const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
         const stockActual = Number(inventario?.stock || 0);
         const stockLiberable = devolucionPorProducto[det.producto_id] || 0;
@@ -124,6 +128,7 @@ export class CreditosService {
       // 1. RESTAURAR STOCK de los detalles anteriores (que se van a borrar)
       if (credito.detalles) {
         for (const det of credito.detalles) {
+          if (!det.producto_id) continue;
           const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
           if (inventario) {
             await this.inventarioService.actualizarInventarioPorProductoId(
@@ -146,6 +151,7 @@ export class CreditosService {
 
       // 4. DISMINUIR STOCK de los nuevos detalles
       for (const det of dto.detalles) {
+        if (!det.producto_id) continue;
         const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
         if (inventario) {
           await this.inventarioService.actualizarInventarioPorProductoId(
@@ -182,6 +188,7 @@ export class CreditosService {
     // RESTAURAR STOCK antes de borrar
     if (credito.detalles) {
       for (const det of credito.detalles) {
+        if (!det.producto_id) continue;
         const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
         if (inventario) {
           await this.inventarioService.actualizarInventarioPorProductoId(

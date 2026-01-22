@@ -12,8 +12,11 @@ export class DetalleCredito {
   @JoinColumn({ name: 'credito_id' })
   credito: Credito;
 
-  @Column({ type: 'int' })
-  producto_id: number;
+  @Column({ type: 'int', nullable: true })
+  producto_id: number | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  descripcion_manual: string;
 
   @ManyToOne(() => Producto)
   @JoinColumn({ name: 'producto_id' })

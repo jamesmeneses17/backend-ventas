@@ -2,7 +2,7 @@
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Like } from 'typeorm';
 import { Cliente } from './entities/cliente.entity';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
@@ -20,11 +20,20 @@ export class ClientesService {
   }
 
   // OBTENER TODOS (findAll) - CON RELACIÓN
-  async findAll(): Promise<Cliente[]> {
+  async findAll(search?: string): Promise<Cliente[]> {
+    const whereCondition = search
+      ? [
+        { nombre: Like(`%${search}%`) },
+        { numero_documento: Like(`%${search}%`) },
+      ]
+      : {};
+
     // Usamos 'relations' para incluir los datos de la entidad relacionada
     return this.clienteRepository.find({
+      where: whereCondition,
       relations: ['tipoDocumento', 'tipoContacto', 'tipoPersona'], // Carga la entidad TipoDocumento y TipoContacto
       order: { id: 'DESC' }, // Ordenar por ID descendente (nuevos primero)
+      take: 20, // Limit results for performance if searching
     });
   }
 
