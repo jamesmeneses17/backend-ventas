@@ -69,175 +69,176 @@ export class CajaService {
         return this.repository.remove(registro);
     }
 
-    // Obtener fecha actual en formato YYYY-MM-DD (Hora Local)
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    async getStats() {
+        // Obtener fecha actual en formato YYYY-MM-DD (Hora Local)
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-    // 1. Saldo Actual: (Ingresos + Ventas + Abonos) - (Egresos + Gastos)
-    // ID 1 = Ingreso, ID 4 = Venta, ID 6 = Abono  => Sumar
-    // ID 2 = Egreso, ID 3 = Gasto   => Restar
-    const saldoQuery = await this.repository
-        .createQueryBuilder('caja')
-        .select("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4, 6) THEN caja.monto ELSE -caja.monto END)", "saldo")
-        .getRawOne();
+        // 1. Saldo Actual: (Ingresos + Ventas + Abonos) - (Egresos + Gastos)
+        // ID 1 = Ingreso, ID 4 = Venta, ID 6 = Abono  => Sumar
+        // ID 2 = Egreso, ID 3 = Gasto   => Restar
+        const saldoQuery = await this.repository
+            .createQueryBuilder('caja')
+            .select("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4, 6) THEN caja.monto ELSE -caja.monto END)", "saldo")
+            .getRawOne();
 
-    // 2. Ingresos de Hoy (Ingresos + Ventas + Abonos)
-    const ingresosQuery = await this.repository
-        .createQueryBuilder('caja')
-        .select("SUM(caja.monto)", "total")
-        .where("caja.tipoMovimientoId IN (1, 4, 6)")
-        .andWhere("caja.fecha = :today", { today })
-        .getRawOne();
+        // 2. Ingresos de Hoy (Ingresos + Ventas + Abonos)
+        const ingresosQuery = await this.repository
+            .createQueryBuilder('caja')
+            .select("SUM(caja.monto)", "total")
+            .where("caja.tipoMovimientoId IN (1, 4, 6)")
+            .andWhere("caja.fecha = :today", { today })
+            .getRawOne();
 
-    // 3. Egresos y Gastos de Hoy
-    const egresosQuery = await this.repository
-        .createQueryBuilder('caja')
-        .select("SUM(caja.monto)", "total")
-        .where("caja.tipoMovimientoId IN (2, 3, 5)")
-        .andWhere("caja.fecha = :today", { today })
-        .getRawOne();
+        // 3. Egresos y Gastos de Hoy
+        const egresosQuery = await this.repository
+            .createQueryBuilder('caja')
+            .select("SUM(caja.monto)", "total")
+            .where("caja.tipoMovimientoId IN (2, 3, 5)")
+            .andWhere("caja.fecha = :today", { today })
+            .getRawOne();
 
         return {
-    saldoActual: Number(saldoQuery.saldo || 0),
-    totalIngresosHoy: Number(ingresosQuery.total || 0),
-    totalEgresosHoy: Number(egresosQuery.total || 0),
-};
+            saldoActual: Number(saldoQuery.saldo || 0),
+            totalIngresosHoy: Number(ingresosQuery.total || 0),
+            totalEgresosHoy: Number(egresosQuery.total || 0),
+        };
     }
     async getResumenAnual(anio: number) {
-    // Agrupar por mes
-    // MySQL: MONTH(fecha) devuelve 1..12
-    const result = await this.repository.createQueryBuilder('caja')
-        .select("MONTH(caja.fecha)", "mesNum")
-        .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4, 6) THEN caja.monto ELSE 0 END)", "ingresos")
-        .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (2, 5) THEN caja.monto ELSE 0 END)", "egresos")
-        .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 3 THEN caja.monto ELSE 0 END)", "gastos")
-        .where("YEAR(caja.fecha) = :anio", { anio })
-        .groupBy("MONTH(caja.fecha)")
-        .orderBy("MONTH(caja.fecha)", "ASC")
-        .getRawMany();
+        // Agrupar por mes
+        // MySQL: MONTH(fecha) devuelve 1..12
+        const result = await this.repository.createQueryBuilder('caja')
+            .select("MONTH(caja.fecha)", "mesNum")
+            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4, 6) THEN caja.monto ELSE 0 END)", "ingresos")
+            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (2, 5) THEN caja.monto ELSE 0 END)", "egresos")
+            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 3 THEN caja.monto ELSE 0 END)", "gastos")
+            .where("YEAR(caja.fecha) = :anio", { anio })
+            .groupBy("MONTH(caja.fecha)")
+            .orderBy("MONTH(caja.fecha)", "ASC")
+            .getRawMany();
 
-    // Mapear resultado para formato frontend (mes nombre, etc)
-    const mesesNombres = [
-        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-    ];
+        // Mapear resultado para formato frontend (mes nombre, etc)
+        const mesesNombres = [
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        ];
 
-    // Crear array con todos los meses inicializados en 0 o solo los que tienen datos?
-    // El usuario pide "tomar los valores de movimientos aparecer esas fechas nomas que le al bde"
-    // Pero para el anual generalmente se muestran todos los meses.
-    // Sin embargo, para cumplir "aparecer esas fechas nomas", devolveré solo lo que haya en BD o haré full fill en frontend.
-    // Viendo el requerimiento "aparecer esas fechas nomas que le al bde" -> sugiere solo mostrar lo que hay.
-    // Pero el FinancialSummary tiene una tabla consolidada anual que suele tener los 12 meses.
-    // Voy a devolver la data procesada combinada con el array de meses para devolver estructura completa,
-    // O devolver raw y que el front decida.
-    // HARÉ UN MAPEO para devolver objetos MonthlyData completos para los meses que existen.
+        // Crear array con todos los meses inicializados en 0 o solo los que tienen datos?
+        // El usuario pide "tomar los valores de movimientos aparecer esas fechas nomas que le al bde"
+        // Pero para el anual generalmente se muestran todos los meses.
+        // Sin embargo, para cumplir "aparecer esas fechas nomas", devolveré solo lo que haya en BD o haré full fill en frontend.
+        // Viendo el requerimiento "aparecer esas fechas nomas que le al bde" -> sugiere solo mostrar lo que hay.
+        // Pero el FinancialSummary tiene una tabla consolidada anual que suele tener los 12 meses.
+        // Voy a devolver la data procesada combinada con el array de meses para devolver estructura completa,
+        // O devolver raw y que el front decida.
+        // HARÉ UN MAPEO para devolver objetos MonthlyData completos para los meses que existen.
 
-    return result.map(r => {
-        const index = Number(r.mesNum) - 1;
-        const ingresos = Number(r.ingresos);
-        const egresos = Number(r.egresos);
-        const gastos = Number(r.gastos);
-        return {
-            mes: mesesNombres[index],
-            ingresos: ingresos,
-            egresos: egresos,
-            gastos: gastos,
-            saldo: ingresos - (egresos + gastos)
-        };
-    });
-}
+        return result.map(r => {
+            const index = Number(r.mesNum) - 1;
+            const ingresos = Number(r.ingresos);
+            const egresos = Number(r.egresos);
+            const gastos = Number(r.gastos);
+            return {
+                mes: mesesNombres[index],
+                ingresos: ingresos,
+                egresos: egresos,
+                gastos: gastos,
+                saldo: ingresos - (egresos + gastos)
+            };
+        });
+    }
 
     async getResumenDiario(anio: number, mes: number) {
-    // Agrupar por día
-    const query = this.repository.createQueryBuilder('caja')
-        .select("caja.fecha", "fecha") // Fecha completa
-        .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4, 6) THEN caja.monto ELSE 0 END)", "ingreso")
-        .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (2, 5) THEN caja.monto ELSE 0 END)", "egreso")
-        .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 3 THEN caja.monto ELSE 0 END)", "gasto")
-        .where("YEAR(caja.fecha) = :anio", { anio })
-        .groupBy("caja.fecha")
-        .orderBy("caja.fecha", "ASC");
+        // Agrupar por día
+        const query = this.repository.createQueryBuilder('caja')
+            .select("caja.fecha", "fecha") // Fecha completa
+            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (1, 4, 6) THEN caja.monto ELSE 0 END)", "ingreso")
+            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId IN (2, 5) THEN caja.monto ELSE 0 END)", "egreso")
+            .addSelect("SUM(CASE WHEN caja.tipoMovimientoId = 3 THEN caja.monto ELSE 0 END)", "gasto")
+            .where("YEAR(caja.fecha) = :anio", { anio })
+            .groupBy("caja.fecha")
+            .orderBy("caja.fecha", "ASC");
 
-    if (mes > 0) {
-        query.andWhere("MONTH(caja.fecha) = :mes", { mes });
+        if (mes > 0) {
+            query.andWhere("MONTH(caja.fecha) = :mes", { mes });
+        }
+
+        const result = await query.getRawMany();
+
+        return result.map(r => {
+            const ingreso = Number(r.ingreso);
+            const egreso = Number(r.egreso);
+            const gasto = Number(r.gasto);
+            return {
+                fecha: r.fecha, // string YYYY-MM-DD o Date
+                mes: "", // Se puede llenar en el front o aquí
+                ingreso: ingreso,
+                egreso: egreso,
+                gasto: gasto,
+                saldo: ingreso - (egreso + gasto)
+            };
+        });
     }
-
-    const result = await query.getRawMany();
-
-    return result.map(r => {
-        const ingreso = Number(r.ingreso);
-        const egreso = Number(r.egreso);
-        const gasto = Number(r.gasto);
-        return {
-            fecha: r.fecha, // string YYYY-MM-DD o Date
-            mes: "", // Se puede llenar en el front o aquí
-            ingreso: ingreso,
-            egreso: egreso,
-            gasto: gasto,
-            saldo: ingreso - (egreso + gasto)
-        };
-    });
-}
 
     async getAvailableYears() {
-    const result = await this.repository.createQueryBuilder('caja')
-        .select("DISTINCT YEAR(caja.fecha)", "year")
-        .orderBy("year", "DESC")
-        .getRawMany();
+        const result = await this.repository.createQueryBuilder('caja')
+            .select("DISTINCT YEAR(caja.fecha)", "year")
+            .orderBy("year", "DESC")
+            .getRawMany();
 
-    return result.map(r => Number(r.year));
-}
+        return result.map(r => Number(r.year));
+    }
 
     async deleteByCompraDetails(criteria: { fecha: string; monto: number; concepto: string; tipo_movimiento_id: number }) {
-    // Encontrar movimiento que coincida con los criterios
-    // Usamos where con parámetros para evitar inyeccion y asegurar tipos
-    // Nota: El concepto podría tener variaciones leves en saltos de linea o espacios, pero intentamos match exacto primero.
-    // Si el concepto es muy largo, cortamos a 255 chars antes de llamar a este metodo.
+        // Encontrar movimiento que coincida con los criterios
+        // Usamos where con parámetros para evitar inyeccion y asegurar tipos
+        // Nota: El concepto podría tener variaciones leves en saltos de linea o espacios, pero intentamos match exacto primero.
+        // Si el concepto es muy largo, cortamos a 255 chars antes de llamar a este metodo.
 
-    const movimiento = await this.repository.findOne({
-        where: {
-            fecha: criteria.fecha,
-            monto: criteria.monto,
-            concepto: criteria.concepto,
-            tipoMovimientoId: criteria.tipo_movimiento_id
+        const movimiento = await this.repository.findOne({
+            where: {
+                fecha: criteria.fecha,
+                monto: criteria.monto,
+                concepto: criteria.concepto,
+                tipoMovimientoId: criteria.tipo_movimiento_id
+            }
+        });
+
+        if (movimiento) {
+            console.log("Eliminando movimiento de caja asociado:", movimiento.id);
+            await this.repository.remove(movimiento);
+        } else {
+            console.warn("No se encontró movimiento de caja para eliminar con criterios:", JSON.stringify(criteria));
         }
-    });
-
-    if (movimiento) {
-        console.log("Eliminando movimiento de caja asociado:", movimiento.id);
-        await this.repository.remove(movimiento);
-    } else {
-        console.warn("No se encontró movimiento de caja para eliminar con criterios:", JSON.stringify(criteria));
     }
-}
 
     async getDetalle(id: number) {
-    const movimiento = await this.repository.findOne({
-        where: { id },
-        relations: [
-            'venta', 'venta.detalles', 'venta.detalles.producto',
-            'compra', 'compra.detalles', 'compra.detalles.producto'
-        ]
-    });
+        const movimiento = await this.repository.findOne({
+            where: { id },
+            relations: [
+                'venta', 'venta.detalles', 'venta.detalles.producto',
+                'compra', 'compra.detalles', 'compra.detalles.producto'
+            ]
+        });
 
-    if (!movimiento) throw new NotFoundException('Movimiento no encontrado');
+        if (!movimiento) throw new NotFoundException('Movimiento no encontrado');
 
-    if (movimiento.venta) {
-        return movimiento.venta.detalles.map(d => ({
-            codigo: d.producto.codigo,
-            nombre: d.producto.nombre,
-            cantidad: d.cantidad
-        }));
+        if (movimiento.venta) {
+            return movimiento.venta.detalles.map(d => ({
+                codigo: d.producto.codigo,
+                nombre: d.producto.nombre,
+                cantidad: d.cantidad
+            }));
+        }
+
+        if (movimiento.compra) {
+            return movimiento.compra.detalles.map(d => ({
+                codigo: d.producto.codigo,
+                nombre: d.producto.nombre,
+                cantidad: d.cantidad
+            }));
+        }
+
+        return [];
     }
-
-    if (movimiento.compra) {
-        return movimiento.compra.detalles.map(d => ({
-            codigo: d.producto.codigo,
-            nombre: d.producto.nombre,
-            cantidad: d.cantidad
-        }));
-    }
-
-    return [];
-}
 }
