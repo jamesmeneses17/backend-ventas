@@ -2,6 +2,7 @@ import { TipoMovimiento } from 'src/modules/catalogos_basicos/tipos-movimiento/e
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { Venta } from '../../../gestion_producto/ventas/entities/venta.entity';
 import { Compra } from '../../../gestion_producto/compras/entities/compra.entity';
+import { PagoCredito } from '../../pagos-creditos/entities/pago-credito.entity';
 
 @Entity('movimientos_caja')
 export class MovimientoCaja {
@@ -37,4 +38,11 @@ export class MovimientoCaja {
     @ManyToOne(() => Compra, { onDelete: 'CASCADE', nullable: true })
     @JoinColumn({ name: 'compra_id' })
     compra: Compra;
+
+    @Column({ name: 'pago_credito_id', nullable: true })
+    pagoCreditoId: number | null;
+
+    @ManyToOne(() => PagoCredito, { onDelete: 'CASCADE', nullable: true }) // Cascade definido en DB
+    @JoinColumn({ name: 'pago_credito_id' })
+    pagoCredito: PagoCredito;
 }

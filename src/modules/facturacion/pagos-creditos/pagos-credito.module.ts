@@ -2,16 +2,18 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PagosCreditoService } from './pagos-credito.service';
 import { PagosCreditoController } from './pagos-credito.controller';
-  import { PagoCredito } from './entities/pago-credito.entity';
+import { PagoCredito } from './entities/pago-credito.entity';
 import { Credito } from '../creditos/entities/creditos.entity';
+
+import { MovimientoCaja } from '../caja/entities/movimiento-caja.entity';
 
 @Module({
   imports: [
     // Registramos ambas entidades para que el Service pueda usarlas
-    TypeOrmModule.forFeature([PagoCredito, Credito])
+    TypeOrmModule.forFeature([PagoCredito, Credito, MovimientoCaja])
   ],
   controllers: [PagosCreditoController],
   providers: [PagosCreditoService],
   exports: [PagosCreditoService] // Por si necesitas usarlo en otro módulo
 })
-export class PagosCreditoModule {}
+export class PagosCreditoModule { }

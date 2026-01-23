@@ -9,6 +9,8 @@ import { Credito } from '../creditos/entities/creditos.entity';
 import { PagoCredito } from './entities/pago-credito.entity';
 import { CreatePagoDto } from './dtos/create-pago.dto';
 
+import { MovimientoCaja } from '../caja/entities/movimiento-caja.entity';
+
 @Injectable()
 export class PagosCreditoService {
   constructor(
@@ -17,6 +19,9 @@ export class PagosCreditoService {
 
     @InjectRepository(Credito)
     private readonly creditosRepository: Repository<Credito>,
+
+    @InjectRepository(MovimientoCaja)
+    private readonly cajaRepository: Repository<MovimientoCaja>,
   ) { }
 
   /**
@@ -27,8 +32,12 @@ export class PagosCreditoService {
   async registrarAbono(createPagoDto: CreatePagoDto) {
     const { credito_id, monto_pago } = createPagoDto;
 
-    // 1. Verificar si el crédito existe
-    const credito = await this.creditosRepository.findOneBy({ id: credito_id });
+    // 1. Verificar si el crédito existe (Incluir Cliente para el concepto)
+    const credito = await this.creditosRepository.findOne({
+      where: { id: credito_id },
+      relations: ['cliente']
+    });
+
     if (!credito) {
       throw new NotFoundException(
         `El crédito con ID ${credito_id} no existe.`,
@@ -48,7 +57,25 @@ export class PagosCreditoService {
       monto_pago,
       fecha_pago: createPagoDto.fecha_pago ? new Date(createPagoDto.fecha_pago) : new Date(),
     });
-    await this.pagosRepository.save(nuevoPago);
+    const pagoGuardado = await this.pagosRepository.save(nuevoPago);
+
+    // 3.5. SYNC CAJA: Crear movimiento de ingreso
+    const concepto = `Abono a Factura: ${credito.numero_factura || 'S/N'} - Cliente: ${credito.cliente?.nombre || 'Desconocido'}`;
+    // Usar la misma fecha del pago para el movimiento de caja
+    const fechaMovimiento = createPagoDto.fecha_pago
+      ? new Date(createPagoDto.fecha_pago).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+
+    const nuevoMovimiento = this.cajaRepository.create({
+      fecha: fechaMovimiento,
+      tipoMovimientoId: 6, // 6 = Ingreso por Abono (Según requerimiento)
+      monto: monto_pago,
+      concepto: concepto,
+      ventaId: null,
+      compraId: null,
+      pagoCreditoId: pagoGuardado.id
+    });
+    await this.cajaRepository.save(nuevoMovimiento);
 
     // 4. UPDATE: Calcular nuevo saldo
     const nuevoSaldo =
