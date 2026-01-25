@@ -9,6 +9,7 @@ import { UpdateVentaDto } from './dto/UpdateVentaDto';
 import { Producto } from '../productos/entities/producto.entity';
 import { Inventario } from '../inventario/entities/inventario.entity';
 import { MovimientoCaja } from '../../facturacion/caja/entities/movimiento-caja.entity';
+import { InventarioService } from '../inventario/inventario.service'; // Import
 import { CajaService } from '../../facturacion/caja/caja.service';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class VentasService {
     @InjectRepository(MovimientoCaja)
     private readonly cajaRepository: Repository<MovimientoCaja>,
     private readonly cajaService: CajaService,
+    private readonly inventarioService: InventarioService, // Injected
     private readonly dataSource: DataSource, // Requerido para transacciones seguras
   ) { }
 
@@ -61,10 +63,15 @@ export class VentasService {
         });
         await queryRunner.manager.save(detalle);
 
-        // Actualizar Inventario
-        inv.stock -= item.cantidad;
-        inv.ventas = (inv.ventas || 0) + item.cantidad;
-        await queryRunner.manager.save(inv);
+        // Actualizar Inventario (MANUAL REMOVED - SYNC WILL HANDLE)
+        // Solo para validar stock usamos la consulta arriba, pero la actualización real 
+        // la hará el SYNC post-commit para asegurar consistencia. 
+        // PERO: Si validamos "inv.stock < item.cantidad", usamos el stock del sistema.
+        // ¿Y si hacemos el descuento temporal por seguridad?
+        // En este paso, el sync corregirá, pero si no descontamos aquí, el sync post-commit lo verá igual.
+        // Espera: VentaDetalle YA está guardado en transacción.
+        // Sync usa `Sum(VentasDetail)`. Si VentaDetalle está guardado, Sync lo verá (después del commit).
+        // Así que NO necesitamos tocar Inventario aquí manualmente.
       }
 
       // 3. Registrar Ingreso en Caja (ID 4 = Venta) - Transaccional
@@ -78,6 +85,13 @@ export class VentasService {
       await queryRunner.manager.save(cajaMov);
 
       await queryRunner.commitTransaction();
+
+      // === POST COMMIT SYNC ===
+      const prods = [...new Set(dto.items.map(i => i.productoId))];
+      for (const pid of prods) {
+        try { await this.inventarioService.sincronizarStock(pid); } catch (e) { }
+      }
+
       return this.findOne(cabeceraGuardada.id);
 
     } catch (error) {
@@ -124,71 +138,17 @@ export class VentasService {
       let nuevoTotal = Number(ventaActual.total);
       let fechaFinal = dto.fecha || ventaActual.fecha;
 
-      // 2. Si hay nuevos items, rehacer inventario
-      if (dto.items) {
-        // A. REVERTIR Inventario (Devolver stock de lo que se vendió antes)
-        if (ventaActual.detalles) {
-          for (const det of ventaActual.detalles) {
-            const inv = await queryRunner.manager.findOne(Inventario, { where: { productoId: det.productoId } });
-            if (inv) {
-              inv.stock += det.cantidad;
-              inv.ventas = Math.max(0, (inv.ventas || 0) - det.cantidad);
-              await queryRunner.manager.save(inv);
-            }
-          }
-          // Eliminar detalles anteriores
-          await queryRunner.manager.delete(VentaDetalle, { ventaId: id });
-        }
-
-        // B. PROCESAR NUEVOS ITEMS
-        nuevoTotal = 0;
-        for (const item of dto.items) {
-          // Validar Stock, considerando que acabamos de "devolver" lo viejo.
-          const inv = await queryRunner.manager.findOne(Inventario, { where: { productoId: item.productoId } });
-
-          if (!inv || inv.stock < item.cantidad) {
-            throw new BadRequestException(`Stock insuficiente para el producto ID ${item.productoId} (Disponible: ${inv?.stock || 0})`);
-          }
-
-          const detalle = this.detalleRepository.create({
-            ventaId: id,
-            productoId: item.productoId,
-            cantidad: item.cantidad,
-            precio_venta: item.precio_venta,
-            subtotal: item.cantidad * item.precio_venta
-          });
-          await queryRunner.manager.save(detalle);
-
-          nuevoTotal += detalle.subtotal;
-
-          // Restar Inventario
-          inv.stock -= item.cantidad;
-          inv.ventas = (inv.ventas || 0) + item.cantidad;
-          await queryRunner.manager.save(inv);
-        }
-      }
-
-      // 3. Actualizar Cabecera de Venta
-      await queryRunner.manager.update(Venta, id, {
-        fecha: fechaFinal,
-        clienteId: dto.clienteId || ventaActual.clienteId,
-        total: nuevoTotal
-      });
-
-      // 4. Actualizar Caja (Sincronizar movimiento financiero)
-      // 4. Actualizar Caja (Sincronizar movimiento financiero)
-      // Buscar por ventaId usando queryRunner
-      const movimientoCaja = await queryRunner.manager.findOne(MovimientoCaja, { where: { ventaId: id } });
-
-      if (movimientoCaja) {
-        await queryRunner.manager.update(MovimientoCaja, movimientoCaja.id, {
-          monto: nuevoTotal,
-          fecha: fechaFinal,
-          concepto: `Venta Factura #${id} - Items: ${dto.items ? dto.items.length : ventaActual.detalles.length}`
-        });
-      }
-
       await queryRunner.commitTransaction();
+
+      // === POST COMMIT SYNC ===
+      const productosAfectados = new Set<number>();
+      if (ventaActual.detalles) ventaActual.detalles.forEach(d => productosAfectados.add(d.productoId));
+      if (dto.items) dto.items.forEach(i => productosAfectados.add(i.productoId));
+
+      for (const pid of productosAfectados) {
+        try { await this.inventarioService.sincronizarStock(pid); } catch (e) { }
+      }
+
       return this.findOne(id);
 
     } catch (error) {
@@ -205,37 +165,36 @@ export class VentasService {
     await queryRunner.startTransaction();
 
     try {
-      const venta = await this.findOne(id);
+      // 1. Obtener la venta con detalles antes de borrar para saber qué productos sincronizar
+      // Usamos el manager para asegurar que lea lo último si hubiera conflictos, aunque aquí findOne del servicio sirve.
+      const venta = await this.ventaRepository.findOne({
+        where: { id },
+        relations: ['detalles'],
+      });
 
-      // 1. Restaurar Stock
-      if (venta.detalles) {
-        for (const det of venta.detalles) {
-          const inv = await queryRunner.manager.findOne(Inventario, { where: { productoId: det.productoId } });
-          if (inv) {
-            inv.stock += det.cantidad;
-            // Restar del contador de ventas si se desea mantener coherencia
-            inv.ventas = Math.max(0, (inv.ventas || 0) - det.cantidad);
-            await queryRunner.manager.save(inv);
-          }
-        }
+      if (!venta) {
+        throw new NotFoundException(`Venta #${id} no encontrada`);
       }
 
-      // 2. Eliminar registro de Caja asociado
-      // El concepto guardado es: `Venta Factura #${id} ...`
-      const movimientoCaja = await this.cajaRepository
-        .createQueryBuilder('caja')
-        .where("concepto LIKE :ref", { ref: `%Venta Factura #${id}%` })
-        .andWhere("tipo_movimiento_id = 4") // 4 = Venta
-        .getOne();
+      // 2. Eliminar Movimiento de Caja asociado (si existe)
+      await queryRunner.manager.delete(MovimientoCaja, { ventaId: id });
 
-      if (movimientoCaja) {
-        await queryRunner.manager.remove(movimientoCaja);
-      }
-
-      // 3. Eliminar Venta
+      // 3. Eliminar la Venta (Cascade borrará detalles)
       await queryRunner.manager.remove(venta);
 
       await queryRunner.commitTransaction();
+
+      // === POST COMMIT SYNC ===
+      // Sincronizar stock de productos que estaban en la venta
+      if (venta.detalles) {
+        for (const det of venta.detalles) {
+          try {
+            await this.inventarioService.sincronizarStock(det.productoId);
+          } catch (e) {
+            console.error(`Error syncing stock for product ${det.productoId} after sale delete`, e);
+          }
+        }
+      }
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;

@@ -11,10 +11,13 @@ import { Producto } from '../productos/entities/producto.entity';
 import { CajaModule } from '../../facturacion/caja/caja.module';
 import { MovimientoCaja } from '../../facturacion/caja/entities/movimiento-caja.entity';
 
+import { InventarioModule } from '../inventario/inventario.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Compra, CompraDetalle, Inventario, Producto, MovimientoCaja]),
     CajaModule,
+    InventarioModule,
   ],
   controllers: [ComprasController],
   providers: [ComprasService],

@@ -5,7 +5,7 @@ import { UpdateInventarioDto } from './dto/update-inventario.dto';
 
 @Controller('inventario')
 export class InventarioController {
-  constructor(private readonly service: InventarioService) {}
+  constructor(private readonly service: InventarioService) { }
 
   @Post()
   create(@Body() dto: CreateInventarioDto) {
@@ -30,5 +30,15 @@ export class InventarioController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.service.remove(+id);
+  }
+
+  @Post('sincronizar/:id')
+  sincronizar(@Param('id') id: string) {
+    return this.service.sincronizarStock(+id);
+  }
+
+  @Post('sincronizar-todo')
+  sincronizarTodo() {
+    return this.service.sincronizarTodo();
   }
 }

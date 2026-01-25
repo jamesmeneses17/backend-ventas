@@ -51,16 +51,17 @@ export class CreditosService {
         this.detalleRepo.create(d),
       );
 
-      // DISMINUIR STOCK
+      // DISMINUIR STOCK Y AUMENTAR VENTAS
       for (const det of detalles) {
         if (!det.producto_id) continue;
         const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
         if (inventario) {
           await this.inventarioService.actualizarInventarioPorProductoId(
             det.producto_id,
-            Number(inventario.stock) - Number(det.cantidad)
-            // No tocamos ventas/compras por ahora o podríamos sumar ventas?
-            // El usuario solo pidió "reducir el inventario".
+            Number(inventario.stock) - Number(det.cantidad),
+            undefined, // Ubicación
+            undefined, // Compras
+            Number(inventario.ventas || 0) + Number(det.cantidad) // Ventas
           );
         }
       }
@@ -125,7 +126,7 @@ export class CreditosService {
         }
       }
 
-      // 1. RESTAURAR STOCK de los detalles anteriores (que se van a borrar)
+      // 1. RESTAURAR STOCK de los detalles anteriores (que se van a borrar) - RESTAR VENTAS
       if (credito.detalles) {
         for (const det of credito.detalles) {
           if (!det.producto_id) continue;
@@ -133,7 +134,10 @@ export class CreditosService {
           if (inventario) {
             await this.inventarioService.actualizarInventarioPorProductoId(
               det.producto_id,
-              Number(inventario.stock) + Number(det.cantidad)
+              Number(inventario.stock) + Number(det.cantidad),
+              undefined,
+              undefined,
+              Math.max(0, Number(inventario.ventas || 0) - Number(det.cantidad)) // Restar Ventas
             );
           }
         }
@@ -149,14 +153,17 @@ export class CreditosService {
         this.detalleRepo.create(d),
       );
 
-      // 4. DISMINUIR STOCK de los nuevos detalles
+      // 4. DISMINUIR STOCK de los nuevos detalles - AUMENTAR VENTAS
       for (const det of dto.detalles) {
         if (!det.producto_id) continue;
         const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
         if (inventario) {
           await this.inventarioService.actualizarInventarioPorProductoId(
             det.producto_id,
-            Number(inventario.stock) - Number(det.cantidad)
+            Number(inventario.stock) - Number(det.cantidad),
+            undefined,
+            undefined,
+            Number(inventario.ventas || 0) + Number(det.cantidad) // Aumentar Ventas
           );
         }
       }
@@ -185,7 +192,7 @@ export class CreditosService {
       throw new Error('Crédito no encontrado');
     }
 
-    // RESTAURAR STOCK antes de borrar
+    // RESTAURAR STOCK antes de borrar - RESTAR VENTAS
     if (credito.detalles) {
       for (const det of credito.detalles) {
         if (!det.producto_id) continue;
@@ -193,7 +200,10 @@ export class CreditosService {
         if (inventario) {
           await this.inventarioService.actualizarInventarioPorProductoId(
             det.producto_id,
-            Number(inventario.stock) + Number(det.cantidad)
+            Number(inventario.stock) + Number(det.cantidad),
+            undefined,
+            undefined,
+            Math.max(0, Number(inventario.ventas || 0) - Number(det.cantidad)) // Restar Ventas
           );
         }
       }

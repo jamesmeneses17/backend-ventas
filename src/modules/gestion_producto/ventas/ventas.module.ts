@@ -9,12 +9,14 @@ import { Inventario } from '../inventario/entities/inventario.entity';
 import { CajaModule } from '../../facturacion/caja/caja.module';
 
 import { MovimientoCaja } from '../../facturacion/caja/entities/movimiento-caja.entity';
+import { InventarioModule } from '../inventario/inventario.module';
 
 @Module({
   imports: [
     // Registramos VentaDetalle para que el Service pueda usar su repositorio
     TypeOrmModule.forFeature([Venta, VentaDetalle, Producto, Inventario, MovimientoCaja]),
     CajaModule,
+    InventarioModule,
   ],
   controllers: [VentasController],
   providers: [VentasService],
