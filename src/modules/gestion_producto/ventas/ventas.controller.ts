@@ -41,4 +41,8 @@ export class VentasController {
   remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return this.ventasService.remove(id);
   }
+  @Get('fix-historical-costs')
+  fixHistoricalCosts() {
+    return this.ventasService.fixHistoricalCosts();
+  }
 }

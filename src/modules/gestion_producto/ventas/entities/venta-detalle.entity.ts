@@ -35,6 +35,9 @@ export class VentaDetalle {
     @Column({ name: 'precio_unitario', type: 'decimal', precision: 12, scale: 2 })
     precio_venta: number;
 
+    @Column({ name: 'costo_unitario', type: 'decimal', precision: 12, scale: 2, default: 0 })
+    costo_unitario: number;
+
     @Column({ type: 'decimal', precision: 12, scale: 2 })
     subtotal: number;
 }

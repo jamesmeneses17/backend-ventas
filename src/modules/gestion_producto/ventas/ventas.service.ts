@@ -47,17 +47,24 @@ export class VentasService {
       // 2. Procesar cada producto
       for (const item of dto.items) {
         // Validar Stock
-        const inv = await queryRunner.manager.findOne(Inventario, { where: { productoId: item.productoId } });
+        // Validar Stock y Obtener Producto (incluyendo precio_costo)
+        const inv = await queryRunner.manager.findOne(Inventario, {
+          where: { productoId: item.productoId },
+          relations: ['producto'] // Necesitamos el producto para el precio_costo
+        });
+
         if (!inv || inv.stock < item.cantidad) {
           throw new BadRequestException(`Stock insuficiente para el producto ID ${item.productoId}`);
         }
+
+        const precioCostoSnapshot = Number(inv.producto.precio_costo || 0);
 
         // Crear Detalle
         const detalle = this.detalleRepository.create({
           ventaId: cabeceraGuardada.id,
           productoId: item.productoId,
           cantidad: item.cantidad,
-
+          costo_unitario: precioCostoSnapshot, // GUARDAR HISTORICO
           precio_venta: item.precio_venta,
           subtotal: item.cantidad * item.precio_venta
         });
@@ -195,6 +202,29 @@ export class VentasService {
           }
         }
       }
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async fixHistoricalCosts(): Promise<string> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      // Actualizar todos los detalles que tengan costo 0 usando el costo actual del producto
+      await queryRunner.manager.query(`
+        UPDATE ventas_detalle vd
+        JOIN productos p ON p.id = vd.producto_id
+        SET vd.costo_unitario = p.precio_costo
+        WHERE vd.costo_unitario = 0
+      `);
+
+      await queryRunner.commitTransaction();
+      return "Costos históricos corregidos correctamente.";
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
