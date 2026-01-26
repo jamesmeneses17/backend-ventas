@@ -83,6 +83,8 @@ export class ProductosService {
       { header: 'Nombre', key: 'nombre', width: 30 },
       { header: 'Categoría', key: 'categoria', width: 20 },
       { header: 'Subcategoría', key: 'subcategoria', width: 20 },
+      { header: 'Compras', key: 'compras', width: 10 },
+      { header: 'Ventas', key: 'ventas', width: 10 },
       { header: 'Stock', key: 'stock', width: 10 },
       { header: 'Precio', key: 'precio', width: 12 },
       { header: 'Precio Venta', key: 'precio_venta', width: 15 },
@@ -100,6 +102,8 @@ export class ProductosService {
       const costo = Number(p.precio_costo ?? 0);
       const promo = Number(p.promocion_porcentaje ?? 0);
       const stock = Number(p.inventario?.stock ?? 0);
+      const compras = Number(p.inventario?.compras ?? 0);
+      const ventas = Number(p.inventario?.ventas ?? 0);
       const precioConDescuento = promo > 0 ? precioVenta - (precioVenta * promo) / 100 : precioVenta;
       const utilidad = precioConDescuento - costo;
       const valorInventario = costo * stock;
@@ -109,6 +113,8 @@ export class ProductosService {
         nombre: p.nombre,
         categoria: p.categoria?.nombre ?? '',
         subcategoria: p.subcategoria?.nombre ?? '',
+        compras: compras,
+        ventas: ventas,
         stock: stock,
         precio: costo,
         precio_venta: precioVenta,
