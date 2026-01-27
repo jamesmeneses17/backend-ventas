@@ -13,6 +13,11 @@ export class ComprasController {
     return this.comprasService.create(dto);
   }
 
+  @Post('sync-caja')
+  syncCaja() {
+    return this.comprasService.syncCajaMovements();
+  }
+
   @Get()
   findAll() {
     // Retornará la cabecera con sus detalles y cliente vinculados

@@ -322,4 +322,45 @@ export class ComprasService {
       precio_costo: nuevoCosto,
     });
   }
+
+  // ===== SYNC CAJA MOVEMENTS =====
+  async syncCajaMovements() {
+    const compras = await this.compraRepo.find();
+    let createdCount = 0;
+    const errors: any[] = []; // Typed explicitly
+
+    for (const compra of compras) {
+      try {
+        // Verificar si ya existe movimiento tipo 5 (Egreso Compra) para esta compra
+        const exists = await this.cajaRepo.findOne({
+          where: {
+            compraId: compra.id,
+            tipoMovimientoId: 5
+          }
+        });
+
+        if (!exists) {
+          // Crear movimiento
+          const nuevoMov = this.cajaRepo.create({
+            tipoMovimientoId: 5, // Egreso por Compra
+            fecha: compra.fecha, // Fecha de la compra
+            monto: Number(compra.total),
+            concepto: `Compra ID: ${compra.id}`,
+            compraId: compra.id,
+          });
+          await this.cajaRepo.save(nuevoMov);
+          createdCount++;
+        }
+      } catch (err) {
+        console.error(`Error syncing compra ${compra.id}`, err);
+        errors.push({ id: compra.id, error: err.message });
+      }
+    }
+
+    return {
+      total_compras: compras.length,
+      created_movements: createdCount,
+      errors
+    };
+  }
 }

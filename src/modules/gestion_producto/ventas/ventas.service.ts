@@ -232,4 +232,45 @@ export class VentasService {
       await queryRunner.release();
     }
   }
+
+  // ===== SYNC CAJA MOVEMENTS =====
+  async syncCajaMovements() {
+    const ventas = await this.ventaRepository.find();
+    let createdCount = 0;
+    const errors: any[] = [];
+
+    for (const venta of ventas) {
+      try {
+        // Verificar si ya existe movimiento tipo 4 (Ingreso Venta) para esta venta
+        const exists = await this.cajaRepository.findOne({
+          where: {
+            ventaId: venta.id,
+            tipoMovimientoId: 4
+          }
+        });
+
+        if (!exists) {
+          // Crear movimiento
+          const nuevoMov = this.cajaRepository.create({
+            tipoMovimientoId: 4, // Ingreso por Venta
+            fecha: venta.fecha, // Fecha de la venta
+            monto: Number(venta.total),
+            concepto: `Venta Factura #${venta.id}`,
+            ventaId: venta.id,
+          });
+          await this.cajaRepository.save(nuevoMov);
+          createdCount++;
+        }
+      } catch (err) {
+        console.error(`Error syncing venta ${venta.id}`, err);
+        errors.push({ id: venta.id, error: err.message });
+      }
+    }
+
+    return {
+      total_ventas: ventas.length,
+      created_movements: createdCount,
+      errors
+    };
+  }
 }

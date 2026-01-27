@@ -19,6 +19,11 @@ export class VentasController {
     return this.ventasService.create(createVentaDto);
   }
 
+  @Post('sync-caja')
+  syncCaja() {
+    return this.ventasService.syncCajaMovements();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Lista todas las cabeceras de ventas' })
   findAll(): Promise<Venta[]> {
