@@ -37,6 +37,8 @@ async function bootstrap() {
       'http://127.0.0.1:3000',
       'https://disemsas.com',
       'https://www.disemsas.com',
+      'https://disemsas.netlify.app',
+
 
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
