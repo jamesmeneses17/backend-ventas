@@ -19,8 +19,8 @@ export class ClientesService {
     return this.clienteRepository.save(cliente);
   }
 
-  // OBTENER TODOS (findAll) - CON RELACIÓN
-  async findAll(search?: string): Promise<Cliente[]> {
+  // OBTENER TODOS (findAll) - CON RELACIÓN Y PAGINACIÓN
+  async findAll(search?: string, page: number = 1, limit?: number): Promise<{ data: Cliente[], total: number }> {
     const whereCondition = search
       ? [
         { nombre: Like(`%${search}%`) },
@@ -28,13 +28,15 @@ export class ClientesService {
       ]
       : {};
 
-    // Usamos 'relations' para incluir los datos de la entidad relacionada
-    return this.clienteRepository.find({
+    const [data, total] = await this.clienteRepository.findAndCount({
       where: whereCondition,
-      relations: ['tipoDocumento', 'tipoContacto', 'tipoPersona'], // Carga la entidad TipoDocumento y TipoContacto
-      order: { id: 'DESC' }, // Ordenar por ID descendente (nuevos primero)
-      take: 20, // Limit results for performance if searching
+      relations: ['tipoDocumento', 'tipoContacto', 'tipoPersona'],
+      order: { id: 'DESC' },
+      take: limit ? limit : undefined,
+      skip: limit ? (page - 1) * limit : undefined,
     });
+
+    return { data, total };
   }
 
   // OBTENER UNO (findOne) - CON RELACIÓN

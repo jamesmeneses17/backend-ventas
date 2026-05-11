@@ -13,8 +13,12 @@ export class ClientesController {
   }
 
   @Get()
-  findAll(@Query('search') search?: string) {
-    return this.clientesService.findAll(search);
+  findAll(
+    @Query('search') search?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.clientesService.findAll(search, page, limit);
   }
 
   @Get(':id')
