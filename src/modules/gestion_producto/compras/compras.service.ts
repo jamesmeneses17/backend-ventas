@@ -307,16 +307,23 @@ export class ComprasService {
     }
   }
 
-  // ===== MÉTODO PRIVADO PARA RECALCULAR PRECIO COSTO (PROMEDIO) =====
+  // ===== MÉTODO PRIVADO PARA RECALCULAR PRECIO COSTO (PROMEDIO PONDERADO) =====
   private async recalculateCostPrice(queryRunner: any, productoId: number) {
-    // Usar QueryBuilder para calcular el promedio directamente en BD
+    // Usamos Promedio Ponderado: SUM(subtotal) / SUM(cantidad)
+    // Esto evita que registros con costo_unitario NULL o 0 distorsionen el promedio.
     const result = await queryRunner.manager
       .createQueryBuilder(CompraDetalle, 'detalle')
-      .select('AVG(COALESCE(detalle.costo_unitario, 0))', 'promedio')
+      .select('SUM(detalle.subtotal)', 'total_subtotal')
+      .addSelect('SUM(detalle.cantidad)', 'total_cantidad')
       .where('detalle.producto_id = :id', { id: productoId })
+      .andWhere('detalle.cantidad > 0')
+      .andWhere('detalle.subtotal IS NOT NULL')
+      .andWhere('detalle.subtotal > 0')
       .getRawOne();
 
-    const nuevoCosto = Number(result?.promedio || 0);
+    const totalSubtotal = Number(result?.total_subtotal || 0);
+    const totalCantidad = Number(result?.total_cantidad || 0);
+    const nuevoCosto = totalCantidad > 0 ? totalSubtotal / totalCantidad : 0;
 
     await queryRunner.manager.update(Producto, productoId, {
       precio_costo: nuevoCosto,

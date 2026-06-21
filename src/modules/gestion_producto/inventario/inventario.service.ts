@@ -136,17 +136,21 @@ export class InventarioService {
     inv.ventas = nuevasVentas;
     inv.compras = nuevasCompras;
 
-    // 7. Recalcular y Actualizar Precio Costo (Promedio Simple) - REPARACIÓN
-    // Calculamos el promedio simple de todas las compras históricas
-    // Usamos COALESCE para que los nulos cuenten como 0 en el promedio
+    // 7. Recalcular y Actualizar Precio Costo (Promedio Ponderado)
+    // Usamos SUM(subtotal) / SUM(cantidad) para obtener el costo real por unidad.
+    // Esto evita el error de AVG con COALESCE que incluía costo 0 de registros NULL.
     const costoRaw = await this.repo.manager.query(
-      `SELECT AVG(COALESCE(costo_unitario, 0)) as promedio FROM compras_detalle WHERE producto_id = ?`,
+      `SELECT SUM(subtotal) as total_subtotal, SUM(cantidad) as total_cantidad
+       FROM compras_detalle
+       WHERE producto_id = ? AND cantidad > 0 AND subtotal IS NOT NULL AND subtotal > 0`,
       [productoId]
     );
 
-    // Si hay historial de compras (promedio no es null), actualizamos el producto
-    if (costoRaw[0] && costoRaw[0].promedio !== null) {
-      const nuevoCosto = Number(costoRaw[0].promedio);
+    // Si hay historial de compras válido, calculamos el promedio ponderado y actualizamos
+    const totalSubtotal = Number(costoRaw[0]?.total_subtotal || 0);
+    const totalCantidad = Number(costoRaw[0]?.total_cantidad || 0);
+    if (totalCantidad > 0) {
+      const nuevoCosto = totalSubtotal / totalCantidad;
       await this.repo.manager.query(
         `UPDATE productos SET precio_costo = ? WHERE id = ?`,
         [nuevoCosto, productoId]
