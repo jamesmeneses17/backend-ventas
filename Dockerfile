@@ -26,6 +26,9 @@ COPY package.json package-lock.json ./
 # **Instala SOLO las dependencias de producción en esta etapa final**
 RUN npm install --only=production
 
+# Instalar mysql-client para poder ejecutar mysqldump (necesario para backups)
+RUN apk add --no-cache mysql-client
+
 # Copiamos solo el código compilado
 COPY --from=builder /app/dist ./dist
 

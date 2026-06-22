@@ -35,6 +35,7 @@ import { TiposMovimientoModule } from './modules/catalogos_basicos/tipos-movimie
 import { TipoContactoClienteModule } from './modules/cliente-administracion/tipo-contacto-cliente/tipo-contacto-cliente.module';
 import { TipoPersonaModule } from './modules/cliente-administracion/tipo-persona/tipo-persona.module';
 import { AjustesModule } from './modules/gestion_producto/ajustes_inventario/ajustes.module';
+import { BackupModule } from './modules/backup/backup.module';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
@@ -83,7 +84,8 @@ import { AjustesModule } from './modules/gestion_producto/ajustes_inventario/aju
     ClientesModule,
     VentasModule,
     TipoPersonaModule,
-    AjustesModule
+    AjustesModule,
+    BackupModule,
   ],
   controllers: [AppController],
   providers: [AppService],
