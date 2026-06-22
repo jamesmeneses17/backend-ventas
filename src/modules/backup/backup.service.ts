@@ -95,8 +95,10 @@ export class BackupService {
     );
 
     return new Promise((resolve, reject) => {
-      // Argumentos de mysqldump (sin shell, sin riesgo de inyección)
+      // Dokploy usa MariaDB internamente → usamos mariadb-dump
+      // --skip-ssl evita el error de certificado autofirmado en la red interna de Docker
       const args = [
+        '--skip-ssl',
         `-h${host}`,
         `-P${port}`,
         `-u${user}`,
@@ -107,7 +109,9 @@ export class BackupService {
         dbName,
       ];
 
-      const mysqldump = spawn('mysqldump', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      // mariadb-dump en Dokploy/Alpine; fallback a mysqldump en otros entornos
+      const dumpCmd = process.env.DUMP_CMD ?? 'mariadb-dump';
+      const mysqldump = spawn(dumpCmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
       const gzip = zlib.createGzip();
       const output = fs.createWriteStream(localPath);
 
