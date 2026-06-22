@@ -1,19 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google } from 'googleapis';
-import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as zlib from 'zlib';
 import * as cron from 'node-cron';
+// mysqldump npm usa mysql2 internamente → soporta caching_sha2_password (MySQL 8)
+// No requiere ningún binario del sistema operativo
+import mysqldump from 'mysqldump';
 
 @Injectable()
 export class BackupService {
   private readonly logger = new Logger(BackupService.name);
-
-  // os.tmpdir() devuelve la carpeta temporal correcta en cada SO:
-  // Linux/Docker: /tmp  |  Windows: C:\Users\...\AppData\Local\Temp
+  // os.tmpdir() funciona en Linux (/tmp) y Windows (AppData\Local\Temp)
   private readonly tmpDir = os.tmpdir();
 
   constructor(private readonly configService: ConfigService) {}
@@ -47,13 +47,13 @@ export class BackupService {
     const localPath = path.join(this.tmpDir, fileName);
 
     try {
-      // 1. Dump + compresión (sin dependencia de shell gzip)
+      // 1. Dump de BD + comprimir con zlib (puro Node.js, sin binarios del SO)
       await this.dumpDatabase(localPath);
 
       // 2. Subir a Google Drive
       const driveFileId = await this.uploadToDrive(localPath, fileName);
 
-      // 3. Borrar archivo local
+      // 3. Borrar archivo local temporal
       this.deleteLocalFile(localPath);
 
       // 4. Rotar backups antiguos en Drive (>30 días)
@@ -74,90 +74,79 @@ export class BackupService {
   }
 
   // ─────────────────────────────────────────────
-  // Paso 1: mysqldump + compresión con zlib de Node.js
-  // No depende de gzip del sistema operativo
+  // Paso 1: Dump con paquete npm "mysqldump"
+  // Usa mysql2 internamente → soporta MySQL 8 (caching_sha2_password)
+  // Sin dependencias de binarios del SO (no necesita mysqldump/mariadb-dump)
   // ─────────────────────────────────────────────
-  private dumpDatabase(localPath: string): Promise<void> {
+  private async dumpDatabase(localPath: string): Promise<void> {
     const host = this.configService.get<string>('DB_HOST', 'localhost');
-    const port = this.configService.get<string>('DB_PORT', '3306');
+    const port = Number(this.configService.get<string>('DB_PORT', '3306'));
     const user = this.configService.get<string>('DB_USER');
-    const pass = this.configService.get<string>('DB_PASS');
-    const dbName = this.configService.get<string>('DB_NAME');
+    const password = this.configService.get<string>('DB_PASS');
+    const database = this.configService.get<string>('DB_NAME');
 
-    if (!user || !pass || !dbName) {
-      return Promise.reject(
-        new Error('Faltan variables de entorno DB_USER, DB_PASS o DB_NAME para el backup.'),
-      );
+    if (!user || !password || !database) {
+      throw new Error('Faltan variables DB_USER, DB_PASS o DB_NAME para el backup.');
     }
 
     this.logger.log(
-      `📦 Ejecutando mysqldump para la base de datos "${dbName}" en ${host}:${port}...`,
+      `📦 Generando dump de "${database}" en ${host}:${port} (puro Node.js)...`,
     );
 
+    try {
+      // El paquete "mysqldump" usa mysql2 y devuelve el SQL como string
+      const result = await mysqldump({
+        connection: { host, port, user, password, database },
+        dump: {
+          schema: {
+            table: { dropIfExist: true },
+          },
+          data: {
+            verbose: false,
+            maxRowsPerInsertStatement: 100,
+          },
+        },
+      });
+
+      // Unir schema + datos + triggers en un único string SQL
+      const sqlContent = [
+        '-- Backup generado por DISEM S.A.S sistema de ventas\n',
+        `-- Fecha: ${new Date().toISOString()}\n\n`,
+        result.dump.schema ?? '',
+        result.dump.data ?? '',
+        result.dump.trigger ?? '',
+      ].join('');
+
+      // Comprimir con zlib de Node.js y escribir al archivo .sql.gz
+      await this.writeGzipped(localPath, sqlContent);
+      this.logger.log(`📦 Dump completado y comprimido: ${localPath}`);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`❌ Error generando dump: ${errMsg}`);
+      throw new Error(`Dump de base de datos falló: ${errMsg}`);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Helper: comprimir string SQL y escribir a disco
+  // ─────────────────────────────────────────────
+  private writeGzipped(filePath: string, content: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Dokploy usa MariaDB internamente → usamos mariadb-dump
-      // --skip-ssl evita el error de certificado autofirmado en la red interna de Docker
-      const args = [
-        '--skip-ssl',
-        `-h${host}`,
-        `-P${port}`,
-        `-u${user}`,
-        `-p${pass}`,
-        '--single-transaction',
-        '--routines',
-        '--triggers',
-        dbName,
-      ];
+      const gzip = zlib.createGzip({ level: zlib.constants.Z_BEST_COMPRESSION });
+      const output = fs.createWriteStream(filePath);
 
-      // mariadb-dump en Dokploy/Alpine; fallback a mysqldump en otros entornos
-      const dumpCmd = process.env.DUMP_CMD ?? 'mariadb-dump';
-      const mysqldump = spawn(dumpCmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-      const gzip = zlib.createGzip();
-      const output = fs.createWriteStream(localPath);
+      gzip.pipe(output);
+      output.on('finish', resolve);
+      output.on('error', reject);
+      gzip.on('error', reject);
 
-      // Pipeline: mysqldump stdout → gzip → archivo .sql.gz
-      mysqldump.stdout.pipe(gzip).pipe(output);
-
-      let stderrOutput = '';
-      mysqldump.stderr.on('data', (data: Buffer) => {
-        const msg = data.toString();
-        // mysqldump imprime advertencias en stderr que no son errores fatales
-        if (!msg.includes('[Warning]') && !msg.includes('Using a password')) {
-          stderrOutput += msg;
-        }
-      });
-
-      mysqldump.on('error', (err) => {
-        reject(
-          new Error(
-            `No se encontró el ejecutable "mysqldump". ` +
-              `Asegúrate de que MySQL Client esté instalado y en el PATH del sistema. Error: ${err.message}`,
-          ),
-        );
-      });
-
-      output.on('finish', () => {
-        if (mysqldump.exitCode !== null && mysqldump.exitCode !== 0) {
-          reject(new Error(`mysqldump terminó con código ${mysqldump.exitCode}: ${stderrOutput}`));
-        } else {
-          this.logger.log(`📦 Dump completado y comprimido: ${localPath}`);
-          resolve();
-        }
-      });
-
-      output.on('error', (err) => reject(new Error(`Error escribiendo archivo temporal: ${err.message}`)));
-      gzip.on('error', (err) => reject(new Error(`Error comprimiendo backup: ${err.message}`)));
-
-      mysqldump.on('close', (code) => {
-        if (code !== 0 && code !== null) {
-          reject(new Error(`mysqldump terminó con código ${code}: ${stderrOutput}`));
-        }
-      });
+      gzip.write(content, 'utf8');
+      gzip.end();
     });
   }
 
   // ─────────────────────────────────────────────
-  // Paso 2: Subir archivo a Google Drive
+  // Paso 2: Subir archivo a Google Drive (OAuth2)
   // ─────────────────────────────────────────────
   private async uploadToDrive(localPath: string, fileName: string): Promise<string> {
     const drive = this.getDriveClient();
@@ -184,11 +173,11 @@ export class BackupService {
       });
 
       const fileId = response.data.id!;
-      this.logger.log(`☁️  Archivo subido exitosamente. Drive ID: ${fileId}`);
+      this.logger.log(`☁️  Archivo subido a Drive. ID: ${fileId}`);
       return fileId;
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      this.logger.error(`❌ Error al subir a Google Drive: ${errMsg}`);
+      this.logger.error(`❌ Error subiendo a Google Drive: ${errMsg}`);
       throw new Error(`Subida a Drive falló: ${errMsg}`);
     }
   }
@@ -199,9 +188,9 @@ export class BackupService {
   private deleteLocalFile(localPath: string): void {
     try {
       fs.unlinkSync(localPath);
-      this.logger.log(`🗑️  Archivo local temporal eliminado: ${localPath}`);
+      this.logger.log(`🗑️  Archivo temporal eliminado: ${localPath}`);
     } catch (error) {
-      this.logger.warn(`⚠️  No se pudo eliminar el archivo local ${localPath}: ${String(error)}`);
+      this.logger.warn(`⚠️  No se pudo eliminar ${localPath}: ${String(error)}`);
     }
   }
 
@@ -239,19 +228,17 @@ export class BackupService {
 
       for (const file of files) {
         await drive.files.delete({ fileId: file.id! });
-        this.logger.log(
-          `🗑️  Backup antiguo eliminado de Drive: ${file.name} (${file.createdTime})`,
-        );
+        this.logger.log(`🗑️  Backup eliminado de Drive: ${file.name} (${file.createdTime})`);
       }
 
       this.logger.log(`🔄 Rotación completada: ${files.length} archivo(s) eliminado(s).`);
     } catch (error) {
-      this.logger.warn(`⚠️  Error durante la rotación de backups: ${String(error)}`);
+      this.logger.warn(`⚠️  Error en rotación de backups: ${String(error)}`);
     }
   }
 
   // ─────────────────────────────────────────────
-  // Helper: construir nombre del archivo
+  // Helper: nombre del archivo con fecha y hora
   // ─────────────────────────────────────────────
   private buildFileName(): string {
     const now = new Date();
@@ -271,14 +258,13 @@ export class BackupService {
 
     if (!clientId || !clientSecret || !refreshToken) {
       throw new Error(
-        'Faltan variables de entorno de Google Drive: GOOGLE_DRIVE_CLIENT_ID, ' +
+        'Faltan variables de Google Drive: GOOGLE_DRIVE_CLIENT_ID, ' +
           'GOOGLE_DRIVE_CLIENT_SECRET o GOOGLE_DRIVE_REFRESH_TOKEN.',
       );
     }
 
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
     oauth2Client.setCredentials({ refresh_token: refreshToken });
-
     return google.drive({ version: 'v3', auth: oauth2Client });
   }
 }

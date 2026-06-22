@@ -26,8 +26,6 @@ COPY package.json package-lock.json ./
 # **Instala SOLO las dependencias de producción en esta etapa final**
 RUN npm install --only=production
 
-# Instalar mariadb-client para mariadb-dump (Dokploy usa MariaDB internamente)
-RUN apk add --no-cache mariadb-client
 
 # Copiamos solo el código compilado
 COPY --from=builder /app/dist ./dist
