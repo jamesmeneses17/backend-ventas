@@ -25,6 +25,14 @@ export class CreditosService {
   async crearCredito(dto: CreateCreditoDto) {
     const { detalles, ...rest } = dto;
 
+    // VALIDACIÓN: Número de factura único
+    if (dto.numero_factura) {
+      const existeFactura = await this.repo.findOne({ where: { numero_factura: dto.numero_factura } });
+      if (existeFactura) {
+        throw new BadRequestException(`Ya existe un crédito registrado con el número de factura ${dto.numero_factura}`);
+      }
+    }
+
     // VALIDACIÓN PREVIA DE STOCK
     if (detalles && Array.isArray(detalles)) {
       for (const det of detalles) {
@@ -100,6 +108,14 @@ export class CreditosService {
 
     if (!credito) {
       throw new Error('Crédito no encontrado');
+    }
+
+    // VALIDACIÓN: Número de factura único (si cambió)
+    if (dto.numero_factura && dto.numero_factura !== credito.numero_factura) {
+      const existeFactura = await this.repo.findOne({ where: { numero_factura: dto.numero_factura } });
+      if (existeFactura) {
+        throw new BadRequestException(`Ya existe otro crédito registrado con el número de factura ${dto.numero_factura}`);
+      }
     }
 
     // Variables para saber qué productos sincronizar al final
