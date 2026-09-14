@@ -50,24 +50,29 @@ export class CreditosService {
       credito.detalles = detalles.map((d) =>
         this.detalleRepo.create(d),
       );
+    }
 
-      // DISMINUIR STOCK Y AUMENTAR VENTAS
+    // Guardar el crédito en la BD PRIMERO. 
+    let savedCredito;
+    try {
+      savedCredito = await this.repo.save(credito);
+    } catch (error: any) {
+      if (error.code === 'ER_NO_REFERENCED_ROW_2' || (error.message && error.message.includes('foreign key constraint fails'))) {
+        throw new BadRequestException('El cliente seleccionado no existe o no es válido. Por favor, asegúrese de seleccionar un nombre válido de la lista.');
+      }
+      throw error; // Relanzar cualquier otro error inesperado
+    }
+
+    // ACTUALIZAR STOCK DESPUÉS DE GUARDAR EXITOSAMENTE
+    if (detalles && Array.isArray(detalles)) {
       for (const det of detalles) {
         if (!det.producto_id) continue;
-        const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
-        if (inventario) {
-          await this.inventarioService.actualizarInventarioPorProductoId(
-            det.producto_id,
-            Number(inventario.stock) - Number(det.cantidad),
-            undefined, // Ubicación
-            undefined, // Compras
-            Number(inventario.ventas || 0) + Number(det.cantidad) // Ventas
-          );
-        }
+        // En lugar de cálculos manuales propensos a errores, le pedimos al sistema que recalcule usando los datos reales
+        await this.inventarioService.sincronizarStock(det.producto_id);
       }
     }
 
-    return this.repo.save(credito);
+    return savedCredito;
   }
 
   async listar() {
@@ -97,8 +102,15 @@ export class CreditosService {
       throw new Error('Crédito no encontrado');
     }
 
-    // Si se actualizan detalles, manejar inventario
+    // Variables para saber qué productos sincronizar al final
+    let oldProductIds: number[] = [];
+    let newProductIds: number[] = [];
+    let requiresSync = false;
+
+    // Si se actualizan detalles, tenemos que reemplazarlos
     if (dto.detalles) {
+      requiresSync = true;
+      
       // 0. VALIDACIÓN PREVIA (Simulando devolución)
       // Mapa para sumar cantidades que se liberarían del crédito actual
       const devolucionPorProducto: Record<number, number> = {};
@@ -106,6 +118,7 @@ export class CreditosService {
         for (const det of credito.detalles) {
           if (det.producto_id) {
             devolucionPorProducto[det.producto_id] = (devolucionPorProducto[det.producto_id] || 0) + Number(det.cantidad);
+            oldProductIds.push(det.producto_id);
           }
         }
       }
@@ -113,6 +126,7 @@ export class CreditosService {
       // Verificar si el stock actual + lo liberado alcanza para lo nuevo
       for (const det of dto.detalles) {
         if (!det.producto_id) continue;
+        newProductIds.push(det.producto_id);
         const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
         const stockActual = Number(inventario?.stock || 0);
         const stockLiberable = devolucionPorProducto[det.producto_id] || 0;
@@ -126,90 +140,66 @@ export class CreditosService {
         }
       }
 
-      // 1. RESTAURAR STOCK de los detalles anteriores (que se van a borrar) - RESTAR VENTAS
-      if (credito.detalles) {
-        for (const det of credito.detalles) {
-          if (!det.producto_id) continue;
-          const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
-          if (inventario) {
-            await this.inventarioService.actualizarInventarioPorProductoId(
-              det.producto_id,
-              Number(inventario.stock) + Number(det.cantidad),
-              undefined,
-              undefined,
-              Math.max(0, Number(inventario.ventas || 0) - Number(det.cantidad)) // Restar Ventas
-            );
-          }
-        }
-      }
-
-      // 2. Eliminar detalles anteriores
+      // 1. Eliminar detalles anteriores
       await this.detalleRepo.delete({
         credito: { id },
       });
 
-      // 3. Crear nuevos detalles
+      // 2. Asignar nuevos detalles (serán creados por TypeORM al guardar)
       credito.detalles = dto.detalles.map((d) =>
         this.detalleRepo.create(d),
       );
-
-      // 4. DISMINUIR STOCK de los nuevos detalles - AUMENTAR VENTAS
-      for (const det of dto.detalles) {
-        if (!det.producto_id) continue;
-        const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
-        if (inventario) {
-          await this.inventarioService.actualizarInventarioPorProductoId(
-            det.producto_id,
-            Number(inventario.stock) - Number(det.cantidad),
-            undefined,
-            undefined,
-            Number(inventario.ventas || 0) + Number(det.cantidad) // Aumentar Ventas
-          );
-        }
-      }
     }
 
     Object.assign(credito, dto);
-    // Nota: "detalles" ya se asignó arriba, pero Object.assign lo sobreescribiría con el DTO (array plano)
-    // Sin embargo typeorm maneja la relación si asignamos entidades. 
-    // Para seguridad, como ya asignamos 'credito.detalles' con entidades creadas, 
-    // Typescript podría quejarse si dto.detalles tiene estructura diferente.
-    // Pero 'dto' es Partial<UpdateCreditoDto>.
-    // Mejor aseguremos que no sobreescriba 'detalles' incorrectamente.
-    // delete dto.detalles; // (No puedo borrar de Partial read-only o similar).
-    // Simplemente guardamos.
 
-    return this.repo.save(credito);
+    // 3. GUARDAR CAMBIOS PRIMERO. 
+    let savedCredito;
+    try {
+      savedCredito = await this.repo.save(credito);
+    } catch (error: any) {
+      if (error.code === 'ER_NO_REFERENCED_ROW_2' || (error.message && error.message.includes('foreign key constraint fails'))) {
+        throw new BadRequestException('El cliente seleccionado no existe o no es válido. Por favor, asegúrese de seleccionar un nombre válido de la lista.');
+      }
+      throw error;
+    }
+
+    // 4. ACTUALIZAR STOCK DESPUÉS DE GUARDAR
+    if (requiresSync) {
+      // Sincronizar todos los productos involucrados (los que salieron y los que entraron)
+      const allProductsToSync = Array.from(new Set([...oldProductIds, ...newProductIds]));
+      for (const prodId of allProductsToSync) {
+        await this.inventarioService.sincronizarStock(prodId);
+      }
+    }
+
+    return savedCredito;
   }
 
   async eliminarCredito(id: number) {
     const credito = await this.repo.findOne({
       where: { id },
-      relations: ['detalles'], // Necesitamos detalles para restaurar stock
+      relations: ['detalles'], // Necesitamos detalles para saber qué productos sincronizar
     });
 
     if (!credito) {
       throw new Error('Crédito no encontrado');
     }
 
-    // RESTAURAR STOCK antes de borrar - RESTAR VENTAS
+    // 1. Eliminar los detalles del crédito manualmente para asegurar que no queden huérfanos
+    await this.detalleRepo.delete({ credito: { id } });
+
+    // 2. Eliminar el crédito principal
+    await this.repo.remove(credito);
+
+    // 3. Sincronizar el inventario de cada producto involucrado
     if (credito.detalles) {
       for (const det of credito.detalles) {
         if (!det.producto_id) continue;
-        const inventario = await this.inventarioService.findOneByProductoId(det.producto_id);
-        if (inventario) {
-          await this.inventarioService.actualizarInventarioPorProductoId(
-            det.producto_id,
-            Number(inventario.stock) + Number(det.cantidad),
-            undefined,
-            undefined,
-            Math.max(0, Number(inventario.ventas || 0) - Number(det.cantidad)) // Restar Ventas
-          );
-        }
+        await this.inventarioService.sincronizarStock(det.producto_id);
       }
     }
 
-    await this.repo.remove(credito);
     return { success: true };
   }
 }
